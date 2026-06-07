@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.0.6</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.0.7</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -284,6 +284,12 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
         </div>
         <div id="reco2Content" style="padding:14px 16px;font-size:14px;line-height:1.75;color:var(--text);white-space:pre-wrap"></div>
         <div id="reco2Sources" style="border-top:0.5px solid var(--border);padding:12px 16px;background:var(--bg2)"></div>
+      </div>
+      <div class="result-card" id="histCard" style="display:none">
+        <div class="result-card-header" style="color:#639922">
+          <i class="ti ti-history"></i> Ce que l'historique du service apporte
+        </div>
+        <div class="result-card-body" id="histContent"></div>
       </div>
       <div class="result-card">
         <div class="result-card-header" style="color:var(--amber)">
@@ -538,6 +544,55 @@ async function searchTavily(query){
   }catch(e){return null;}
 }
 
+async function searchPatientHistory(ref, age, sexe, symptoms){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.supabaseUrl||!cfg.supabaseKey)return null;
+  try{
+    // Cherche dans les gardes passées par mots-clés sur symptômes
+    const symsQuery=symptoms.slice(0,3).map(s=>encodeURIComponent(s)).join(',');
+    const url=cfg.supabaseUrl+'/rest/v1/gardes?select=patient_id,date_garde,medecin,symptomes,diagnostic_ia,plan_action,notes_brutes&order=date_garde.desc&limit=5';
+    const res=await fetch(url,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
+    if(!res.ok)return null;
+    const gardes=await res.json();
+    if(!gardes||gardes.length===0)return null;
+
+    // Filtre les gardes pertinentes par correspondance symptômes
+    const relevant=gardes.filter(g=>{
+      if(!g.symptomes)return false;
+      return symptoms.some(s=>g.symptomes.some(gs=>gs.toLowerCase().includes(s.toLowerCase().substring(0,5))));
+    });
+
+    if(relevant.length===0)return null;
+
+    // Récupère les données médicales des patients concernés
+    const patientIds=[...new Set(relevant.map(g=>g.patient_id))].slice(0,3);
+    const medUrl=cfg.supabaseUrl+'/rest/v1/patients_medicaux?id=in.('+patientIds.join(',')+')&select=id,age,sexe,antecedents,traitements';
+    const medRes=await fetch(medUrl,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
+    const medData=medRes.ok?await medRes.json():[];
+
+    return {gardes:relevant.slice(0,3), patients:medData};
+  }catch(e){
+    console.log('Historique skip:',e.message);
+    return null;
+  }
+}
+
+function formatHistoryContext(history){
+  if(!history||!history.gardes||history.gardes.length===0)return '';
+  let ctx='\n\n=== HISTORIQUE DU SERVICE (gardes précédentes similaires) ===\n';
+  ctx+='Ces cas similaires ont été gérés récemment dans le service:\n\n';
+  history.gardes.forEach((g,i)=>{
+    const d=new Date(g.date_garde).toLocaleDateString('fr-FR');
+    ctx+='Cas '+(i+1)+' ('+d+' — '+g.medecin+'):\n';
+    ctx+='Symptômes: '+(g.symptomes||[]).join(', ')+'\n';
+    if(g.diagnostic_ia)ctx+='Diagnostic: '+g.diagnostic_ia.substring(0,200)+'\n';
+    if(g.plan_action)ctx+='Plan appliqué: '+g.plan_action.substring(0,200)+'\n';
+    ctx+='\n';
+  });
+  ctx+='=== FIN HISTORIQUE ===\n';
+  return ctx;
+}
+
 async function analyzePatient(){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
   if(!cfg.claudeKey){openConfig();return;}
@@ -548,17 +603,29 @@ async function analyzePatient(){
   if(!notes&&selectedSymptoms.length===0){showToast('Saisissez une description ou sélectionnez des symptômes');return;}
   document.getElementById('form-section').style.display='none';
   document.getElementById('loadingState').style.display='block';
+  document.getElementById('loadingState').querySelector('small').textContent='Consultation de l'historique du service...';
   document.getElementById('resultSection').style.display='none';
+
+  // Recherche historique Supabase
+  const history=await searchPatientHistory(ref, age, sexe, selectedSymptoms);
+  const historyContext=formatHistoryContext(history);
+  if(history&&history.gardes.length>0){
+    document.getElementById('loadingState').querySelector('small').textContent='Historique trouvé — Analyse en cours...';
+    showToast(history.gardes.length+' garde(s) similaire(s) trouvée(s) dans l'historique');
+  } else {
+    document.getElementById('loadingState').querySelector('small').textContent='Analyse en cours...';
+  }
 
   const patientDesc='Patient: '+ref+', '+(age?age+' ans':'âge non précisé')+', '+(sexe==='F'?'Femme':sexe==='M'?'Homme':'sexe non précisé')+
     '\nSymptômes: '+(selectedSymptoms.length>0?selectedSymptoms.join(', '):'voir notes')+
     '\nNotes cliniques: '+(notes||'voir symptômes')+
-    (attachedFileText?'\nDocument joint:\n'+attachedFileText.substring(0,2000):'');
+    (attachedFileText?'\nDocument joint:\n'+attachedFileText.substring(0,2000):'')+
+    historyContext;
 
-  const sysDiag='Tu es un assistant médical spécialisé en gériatrie pour un médecin en France. Aide à la décision uniquement — le médecin reste seul responsable.\nRéponds UNIQUEMENT en JSON valide:\n{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","vigilance":"string","resume_court":"string 2 lignes max","mots_cles_recherche":"string — 3 à 5 mots-clés médicaux pour recherche HAS/OMS"}';
+  const sysDiag='Tu es un assistant médical spécialisé en gériatrie pour un médecin en France. Aide à la décision uniquement — le médecin reste seul responsable.\nSi un historique du service est fourni, utilise-le pour enrichir ton analyse (mentionner ce qui a fonctionné avant, les patterns récurrents).\nRéponds UNIQUEMENT en JSON valide:\n{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","vigilance":"string","resume_court":"string 2 lignes max","mots_cles_recherche":"string — 3 à 5 mots-clés médicaux pour recherche HAS/OMS","historique_pertinent":"string — résumé de ce que l'historique apporte ou null si pas d'historique"}';
 
   try{
-    // Step 1: diagnostic de base
+    // Step 1: diagnostic de base enrichi par historique
     const rawDiag=await callClaude(patientDesc, sysDiag);
     const m=rawDiag.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Réponse invalide');
@@ -619,6 +686,14 @@ function renderResult(r){
   const map={FAIBLE:['badge-success','Urgence faible'],MODÉRÉE:['badge-warning','Urgence modérée'],ÉLEVÉE:['badge-danger','Urgence élevée'],CRITIQUE:['badge-danger','⚠ CRITIQUE']};
   const [cls,label]=map[r.urgence]||['badge-warning',r.urgence];
   document.getElementById('urgencyBadge').innerHTML='<span class="badge '+cls+'">'+label+'</span>';
+  // Afficher historique pertinent si disponible
+  const histEl=document.getElementById('histCard');
+  if(r.historique_pertinent&&r.historique_pertinent!='null'&&r.historique_pertinent!==null){
+    histEl.style.display='block';
+    document.getElementById('histContent').textContent=r.historique_pertinent;
+  } else {
+    histEl.style.display='none';
+  }
   document.getElementById('reco1Content').textContent='';
   document.getElementById('reco2Content').textContent='';
   document.getElementById('reco1Sources').innerHTML='';
