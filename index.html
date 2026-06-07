@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.0.2</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.0.3</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -330,10 +330,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
     <button class="config-close" onclick="closeConfig()"><i class="ti ti-x"></i></button>
     <h3><i class="ti ti-settings" style="font-size:16px;margin-right:6px"></i>Configuration</h3>
     <div class="form-group" style="margin-bottom:14px">
-      <label class="form-label">Clé API Gemini</label>
+      <label class="form-label">Clé API Claude</label>
       <div class="key-input-wrap">
-        <input type="password" id="geminiKey" placeholder="AIza..." oninput="saveConfig()"/>
-        <button class="key-toggle" onclick="toggleVis('geminiKey')">Voir</button>
+        <input type="password" id="claudeKey" placeholder="sk-ant-..." oninput="saveConfig()"/>
+        <button class="key-toggle" onclick="toggleVis('claudeKey')">Voir</button>
       </div>
       <div class="config-status" id="keyStatus">
         <span class="status-dot status-na"></span> Non configurée
@@ -376,7 +376,7 @@ function showToast(msg){
 
 function loadConfig(){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
-  if(cfg.geminiKey){document.getElementById('geminiKey').value=cfg.geminiKey;updateKeyStatus();}
+  if(cfg.claudeKey){document.getElementById('claudeKey').value=cfg.claudeKey;updateKeyStatus();}
   if(cfg.supabaseUrl)document.getElementById('supabaseUrl').value=cfg.supabaseUrl;
   if(cfg.supabaseKey)document.getElementById('supabaseKey').value=cfg.supabaseKey;
   if(cfg.doctorName)document.getElementById('doctorName').value=cfg.doctorName;
@@ -384,7 +384,7 @@ function loadConfig(){
 
 function saveConfig(){
   const cfg={
-    geminiKey:document.getElementById('geminiKey').value,
+    claudeKey:document.getElementById('claudeKey').value,
     supabaseUrl:document.getElementById('supabaseUrl').value,
     supabaseKey:document.getElementById('supabaseKey').value,
     doctorName:document.getElementById('doctorName').value
@@ -394,7 +394,7 @@ function saveConfig(){
 }
 
 function updateKeyStatus(){
-  const key=document.getElementById('geminiKey').value;
+  const key=document.getElementById('claudeKey').value;
   const el=document.getElementById('keyStatus');
   if(key&&key.length>10){
     el.innerHTML='<span class="status-dot status-ok"></span> Clé configurée';
@@ -410,9 +410,9 @@ function toggleVis(id){const i=document.getElementById(id);i.type=i.type==='pass
 
 async function testConnection(){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
-  if(!cfg.geminiKey){showToast('Clé Gemini manquante');return;}
+  if(!cfg.claudeKey){showToast('Clé Claude manquante');return;}
   try{
-    const r=await callGemini('Réponds juste: "GardIA opérationnel ✓"','');
+    const r=await callClaude('Réponds juste: "GardIA opérationnel ✓"','');
     showToast(r.substring(0,50));
     closeConfig();
   }catch(e){showToast('Erreur: '+e.message);}
@@ -452,23 +452,24 @@ function removeFile(){
   document.getElementById('fileInput').value='';
 }
 
-async function callGemini(prompt,systemContext){
+async function callClaude(prompt,systemContext){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
-  if(!cfg.geminiKey)throw new Error('Clé Gemini non configurée. Allez dans Config.');
-  const full=systemContext?systemContext+'\n\n'+prompt:prompt;
-  const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+cfg.geminiKey,{
+  if(!cfg.claudeKey)throw new Error('Clé Claude non configurée. Allez dans Config.');
+  const body={model:'claude-haiku-4-5-20251001',max_tokens:2048,messages:[{role:'user',content:prompt}]};
+  if(systemContext)body.system=systemContext;
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:full}]}],generationConfig:{temperature:0.3,maxOutputTokens:2048}})
+    headers:{'Content-Type':'application/json','x-api-key':cfg.claudeKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify(body)
   });
-  if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'Erreur API Gemini');}
+  if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'Erreur API Claude');}
   const data=await res.json();
-  return data.candidates[0].content.parts[0].text;
+  return data.content[0].text;
 }
 
 async function analyzePatient(){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
-  if(!cfg.geminiKey){openConfig();return;}
+  if(!cfg.claudeKey){openConfig();return;}
   const ref=document.getElementById('patientRef').value||'Patient anonyme';
   const age=document.getElementById('patientAge').value;
   const sexe=document.getElementById('patientSexe').value;
@@ -487,7 +488,7 @@ Symptômes: ${selectedSymptoms.length>0?selectedSymptoms.join(', '):'voir notes'
 Notes cliniques: ${notes||'voir symptômes'}
 ${attachedFileText?'Document joint:\n'+attachedFileText.substring(0,2000):''}`;
   try{
-    const raw=await callGemini(prompt,sys);
+    const raw=await callClaude(prompt,sys);
     const m=raw.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Réponse invalide');
     const result=JSON.parse(m[0]);
