@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.1.5</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.1.6</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -661,8 +661,14 @@ async function analyzePatient(){
   const sysDiag='Tu es un assistant médical spécialisé en gériatrie pour un médecin en France. Aide à la décision uniquement — le médecin reste seul responsable.\nSi un historique du service est fourni, utilise-le pour enrichir ton analyse (mentionner ce qui a fonctionné avant, les patterns récurrents).\nRéponds UNIQUEMENT en JSON valide:\n{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","vigilance":"string","resume_court":"string 2 lignes max","mots_cles_recherche":"string — 3 à 5 mots-clés médicaux pour recherche HAS/OMS","vigilance_extra":"string ou null"}';
 
   try{
-    // Step 1: diagnostic de base enrichi par historique
-    const rawDiag=await callClaude(patientDesc, sysDiag);
+    // Lancer Claude diagnostic ET Tavily EN PARALLELE
+    document.getElementById('reco1Loading').style.display='block';
+    const keywords0=selectedSymptoms.slice(0,3).join(' ')+' gériatrie';
+    const [rawDiag, tavilyResults]=await Promise.all([
+      callClaude(patientDesc, sysDiag),
+      searchTavily('recommandations HAS OMS '+keywords0+' personne âgée gériatrie')
+    ]);
+
     const m=rawDiag.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Réponse invalide');
     const result=JSON.parse(m[0]);
@@ -676,16 +682,12 @@ async function analyzePatient(){
     document.getElementById('loadingState').style.display='none';
     document.getElementById('resultSection').style.display='block';
     renderResult(result);
-    // Afficher les releves brutes directement sans IA
     if(history&&history.releves&&history.releves.length>0){
       displayRawHistory(history.releves);
     }
 
-    // Step 2: Reco 1 — HAS/OMS avec Tavily
-    document.getElementById('reco1Loading').style.display='block';
-    document.getElementById('reco1Content').textContent='';
-    const keywords=result.mots_cles_recherche||selectedSymptoms.slice(0,3).join(' ')+' gériatrie';
-    const tavilyResults=await searchTavily('recommandations HAS OMS '+keywords+' personne âgée gériatrie');
+    // HAS/OMS — Tavily deja fini, on demande juste a Claude de reformuler
+    const keywords=result.mots_cles_recherche||keywords0;
     let sourcesContext='';
     let sources1=[];
     if(tavilyResults&&tavilyResults.length>0){
@@ -698,8 +700,6 @@ async function analyzePatient(){
     document.getElementById('reco1Loading').style.display='none';
     document.getElementById('reco1Content').textContent=reco1Text;
     renderSources(sources1,'reco1Sources');
-
-    // Analyse IA supprimee — HAS/OMS suffit
 
   }catch(e){
     document.getElementById('loadingState').style.display='none';
