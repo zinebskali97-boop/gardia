@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.1.6</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.1.7</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -661,24 +661,13 @@ async function analyzePatient(){
   const sysDiag='Tu es un assistant médical spécialisé en gériatrie pour un médecin en France. Aide à la décision uniquement — le médecin reste seul responsable.\nSi un historique du service est fourni, utilise-le pour enrichir ton analyse (mentionner ce qui a fonctionné avant, les patterns récurrents).\nRéponds UNIQUEMENT en JSON valide:\n{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","vigilance":"string","resume_court":"string 2 lignes max","mots_cles_recherche":"string — 3 à 5 mots-clés médicaux pour recherche HAS/OMS","vigilance_extra":"string ou null"}';
 
   try{
-    // Lancer Claude diagnostic ET Tavily EN PARALLELE
-    document.getElementById('reco1Loading').style.display='block';
-    const keywords0=selectedSymptoms.slice(0,3).join(' ')+' gériatrie';
-    const [rawDiag, tavilyResults]=await Promise.all([
-      callClaude(patientDesc, sysDiag),
-      searchTavily('recommandations HAS OMS '+keywords0+' personne âgée gériatrie')
-    ]);
-
+    // ETAPE 1 — Diagnostic Claude immédiat — médecin voit le résultat tout de suite
+    const rawDiag=await callClaude(patientDesc, sysDiag);
     const m=rawDiag.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Réponse invalide');
     const result=JSON.parse(m[0]);
 
-    currentAnalysis={id:Date.now(),date:new Date().toISOString(),patientRef:ref,age,sexe,symptomes:[...selectedSymptoms],notes,result};
-    analysisHistory.unshift(currentAnalysis);
-    saveToLocalHistory();
-    await saveToSupabase(currentAnalysis);
-    await saveHistoryToSupabase(currentAnalysis);
-
+    // Afficher IMMEDIATEMENT sans attendre Tavily
     document.getElementById('loadingState').style.display='none';
     document.getElementById('resultSection').style.display='block';
     renderResult(result);
@@ -686,25 +675,39 @@ async function analyzePatient(){
       displayRawHistory(history.releves);
     }
 
-    // HAS/OMS — Tavily deja fini, on demande juste a Claude de reformuler
-    const keywords=result.mots_cles_recherche||keywords0;
-    let sourcesContext='';
-    let sources1=[];
-    if(tavilyResults&&tavilyResults.length>0){
-      sources1=tavilyResults.map(r=>({title:r.title,url:r.url,date:r.published_date||''}));
-      sourcesContext='\n\nSOURCES DISPONIBLES (cite-les précisément dans ta réponse avec [Source N]):\n'+
-        tavilyResults.map((r,i)=>'[Source '+(i+1)+'] '+r.title+'\nURL: '+r.url+'\nContenu: '+r.content.substring(0,500)).join('\n\n');
-    }
-    const sysReco1='Tu es un assistant médical. Rédige des recommandations cliniques UNIQUEMENT basées sur les sources HAS, OMS et recommandations officielles françaises fournies. Pour chaque recommandation, cite la source exacte avec [Source N]. Si une source ne concerne pas directement le cas, ne la cite pas. Sois précis et cliniquement utile. Commence par "Recommandations basées sur les sources officielles :"';
-    const reco1Text=await callClaude(patientDesc+sourcesContext, sysReco1);
-    document.getElementById('reco1Loading').style.display='none';
-    document.getElementById('reco1Content').textContent=reco1Text;
-    renderSources(sources1,'reco1Sources');
+    // Sauvegarder en arrière-plan (non bloquant)
+    currentAnalysis={id:Date.now(),date:new Date().toISOString(),patientRef:ref,age,sexe,symptomes:[...selectedSymptoms],notes,result};
+    analysisHistory.unshift(currentAnalysis);
+    saveToLocalHistory();
+    saveToSupabase(currentAnalysis);
+    saveHistoryToSupabase(currentAnalysis);
+
+    // ETAPE 2 — HAS/OMS charge en arrière-plan pendant que le médecin lit le diagnostic
+    document.getElementById('reco1Loading').style.display='block';
+    const keywords=result.mots_cles_recherche||selectedSymptoms.slice(0,3).join(' ')+' gériatrie';
+    (async()=>{
+      try{
+        const tavilyResults=await searchTavily('recommandations HAS OMS '+keywords+' personne âgée gériatrie');
+        let sourcesContext='';
+        let sources1=[];
+        if(tavilyResults&&tavilyResults.length>0){
+          sources1=tavilyResults.map(r=>({title:r.title,url:r.url,date:r.published_date||''}));
+          sourcesContext='\n\nSOURCES:\n'+tavilyResults.map((r,i)=>'[Source '+(i+1)+'] '+r.title+'\nURL: '+r.url+'\nContenu: '+r.content.substring(0,400)).join('\n\n');
+        }
+        const sysReco1='Tu es un assistant médical. Recommandations cliniques basées sur sources HAS/OMS fournies. Cite chaque source [Source N]. Concis et cliniquement utile.';
+        const reco1Text=await callClaude(patientDesc+sourcesContext, sysReco1);
+        document.getElementById('reco1Loading').style.display='none';
+        document.getElementById('reco1Content').textContent=reco1Text;
+        renderSources(sources1,'reco1Sources');
+      }catch(e2){
+        document.getElementById('reco1Loading').style.display='none';
+        document.getElementById('reco1Content').textContent='Recommandations HAS/OMS indisponibles.';
+      }
+    })();
 
   }catch(e){
     document.getElementById('loadingState').style.display='none';
     document.getElementById('reco1Loading').style.display='none';
-    
     document.getElementById('form-section').style.display='block';
     showToast('Erreur: '+e.message);
   }
