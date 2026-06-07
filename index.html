@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.0.9</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.1.0</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -571,33 +571,60 @@ async function searchTavily(query){
   }catch(e){return null;}
 }
 
-async function searchPatientHistory(ref, age, sexe, symptoms){
+async function searchPatientHistory(ref, age, sexe, symptoms, notes){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
   if(!cfg.supabaseUrl||!cfg.supabaseKey)return null;
   try{
-    // Cherche dans les gardes passées par mots-clés sur symptômes
-    const symsQuery=symptoms.slice(0,3).map(s=>encodeURIComponent(s)).join(',');
-    const url=cfg.supabaseUrl+'/rest/v1/gardes?select=patient_id,date_garde,medecin,symptomes,diagnostic_ia,plan_action,notes_brutes&order=date_garde.desc&limit=5';
+    // Charge toutes les gardes du service
+    const url=cfg.supabaseUrl+'/rest/v1/gardes?select=patient_id,date_garde,medecin,symptomes,diagnostic_ia,plan_action,notes_brutes&order=date_garde.desc&limit=200';
     const res=await fetch(url,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
     if(!res.ok)return null;
     const gardes=await res.json();
     if(!gardes||gardes.length===0)return null;
 
-    // Filtre les gardes pertinentes par correspondance symptômes
-    const relevant=gardes.filter(g=>{
-      if(!g.symptomes)return false;
-      return symptoms.some(s=>g.symptomes.some(gs=>gs.toLowerCase().includes(s.toLowerCase().substring(0,5))));
-    });
+    // Mots-clés de recherche: symptômes sélectionnés + mots des notes cliniques
+    const keywords=[...symptoms];
+    if(notes){
+      // Extraire mots significatifs des notes (longueur > 4)
+      const noteWords=notes.split(/\s+/).filter(w=>w.length>4).map(w=>w.toLowerCase().replace(/[^a-zàâéèêëîïôùûüç]/g,''));
+      keywords.push(...noteWords.slice(0,10));
+    }
 
-    if(relevant.length===0)return null;
+    // Score chaque garde selon nombre de mots-clés correspondants
+    const scored=gardes.map(g=>{
+      let score=0;
+      const gSymptomes=(g.symptomes||[]).join(' ').toLowerCase();
+      const gDiag=(g.diagnostic_ia||'').toLowerCase();
+      const gPlan=(g.plan_action||'').toLowerCase();
+      const gNotes=(g.notes_brutes||'').toLowerCase();
+      const gAll=gSymptomes+' '+gDiag+' '+gPlan+' '+gNotes;
+      keywords.forEach(kw=>{
+        if(kw.length<4)return;
+        const kwLow=kw.toLowerCase();
+        if(gSymptomes.includes(kwLow))score+=3; // symptôme exact = poids fort
+        else if(gDiag.includes(kwLow))score+=2;
+        else if(gAll.includes(kwLow))score+=1;
+      });
+      return {...g, score};
+    }).filter(g=>g.score>0).sort((a,b)=>b.score-a.score);
 
-    // Récupère les données médicales des patients concernés
-    const patientIds=[...new Set(relevant.map(g=>g.patient_id))].slice(0,3);
+    if(scored.length===0)return null;
+
+    // Prend toutes les gardes pertinentes (score > 0), max 20
+    const relevant=scored.slice(0,20);
+
+    // Charge données médicales des patients concernés
+    const patientIds=[...new Set(relevant.map(g=>g.patient_id))];
     const medUrl=cfg.supabaseUrl+'/rest/v1/patients_medicaux?id=in.('+patientIds.join(',')+')&select=id,age,sexe,antecedents,traitements';
     const medRes=await fetch(medUrl,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
     const medData=medRes.ok?await medRes.json():[];
 
-    return {gardes:relevant.slice(0,3), patients:medData};
+    // Charge identités (sans noms — juste chambre et service)
+    const idUrl=cfg.supabaseUrl+'/rest/v1/patients_identites?id=in.('+patientIds.join(',')+')&select=id,chambre,etablissement';
+    const idRes=await fetch(idUrl,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
+    const idData=idRes.ok?await idRes.json():[];
+
+    return {gardes:relevant, patients:medData, identites:idData, total:scored.length};
   }catch(e){
     console.log('Historique skip:',e.message);
     return null;
@@ -606,14 +633,22 @@ async function searchPatientHistory(ref, age, sexe, symptoms){
 
 function formatHistoryContext(history){
   if(!history||!history.gardes||history.gardes.length===0)return '';
-  let ctx='\n\n=== HISTORIQUE DU SERVICE (gardes précédentes similaires) ===\n';
-  ctx+='Ces cas similaires ont été gérés récemment dans le service:\n\n';
+  let ctx='\n\n=== HISTORIQUE COMPLET DU SERVICE ('+history.gardes.length+' cas pertinents sur '+history.total+' gardes) ===\n';
+  ctx+='Voici TOUTES les situations cliniques similaires déjà gérées dans ce service. Utilise cet historique pour enrichir ton analyse:\n\n';
   history.gardes.forEach((g,i)=>{
     const d=new Date(g.date_garde).toLocaleDateString('fr-FR');
-    ctx+='Cas '+(i+1)+' ('+d+' — '+g.medecin+'):\n';
+    // Trouver chambre/service du patient
+    const id=history.identites?history.identites.find(x=>x.id===g.patient_id):null;
+    const med=history.patients?history.patients.find(x=>x.id===g.patient_id):null;
+    const lieu=id?(id.etablissement||'')+(id.chambre?' ch'+id.chambre:''):'';
+    ctx+='--- Garde du '+d+' ('+g.medecin+(lieu?' — '+lieu:'')+') ---\n';
+    if(med&&med.antecedents&&med.antecedents.length>0){
+      ctx+='Antécédents patient: '+med.antecedents.join(', ')+'\n';
+    }
     ctx+='Symptômes: '+(g.symptomes||[]).join(', ')+'\n';
-    if(g.diagnostic_ia)ctx+='Diagnostic: '+g.diagnostic_ia.substring(0,200)+'\n';
-    if(g.plan_action)ctx+='Plan appliqué: '+g.plan_action.substring(0,200)+'\n';
+    if(g.diagnostic_ia)ctx+='Diagnostic posé: '+g.diagnostic_ia+'\n';
+    if(g.plan_action)ctx+='Plan appliqué: '+g.plan_action+'\n';
+    if(g.notes_brutes)ctx+='Notes: '+g.notes_brutes+'\n';
     ctx+='\n';
   });
   ctx+='=== FIN HISTORIQUE ===\n';
@@ -634,11 +669,11 @@ async function analyzePatient(){
   document.getElementById('resultSection').style.display='none';
 
   // Recherche historique Supabase
-  const history=await searchPatientHistory(ref, age, sexe, selectedSymptoms);
+  const history=await searchPatientHistory(ref, age, sexe, selectedSymptoms, notes);
   const historyContext=formatHistoryContext(history);
   if(history&&history.gardes.length>0){
     document.getElementById('loadingState').querySelector('small').textContent='Historique trouvé - Analyse en cours...';
-    showToast(history.gardes.length+' garde(s) similaire(s) trouvee(s)');
+    showToast(history.gardes.length+' releve(s) pertinente(s) trouvee(s) dans historique');
   } else {
     document.getElementById('loadingState').querySelector('small').textContent='Analyse en cours...';
   }
