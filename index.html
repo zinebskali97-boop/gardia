@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.0.3</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.0.4</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -253,7 +253,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
           <i class="ti ti-plus"></i> Nouveau
         </button>
       </div>
-      <div class="result-card" id="diagCard">
+      <div class="result-card">
         <div class="result-card-header" style="color:var(--teal)">
           <i class="ti ti-stethoscope"></i>
           Diagnostic différentiel
@@ -261,17 +261,35 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
         </div>
         <div class="result-card-body" id="diagContent"></div>
       </div>
+      <div style="display:flex;gap:0;margin-bottom:0;border:0.5px solid var(--border);border-radius:var(--radius-lg) var(--radius-lg) 0 0;overflow:hidden">
+        <button id="recoTab1" onclick="switchReco(1)" style="flex:1;padding:11px 8px;font-size:13px;font-weight:500;border:none;cursor:pointer;font-family:var(--font-body);background:var(--blue);color:white;display:flex;align-items:center;justify-content:center;gap:6px;border-right:0.5px solid var(--border)">
+          <i class="ti ti-certificate"></i> HAS / OMS
+        </button>
+        <button id="recoTab2" onclick="switchReco(2)" style="flex:1;padding:11px 8px;font-size:13px;font-weight:500;border:none;cursor:pointer;font-family:var(--font-body);background:var(--bg2);color:var(--text2);display:flex;align-items:center;justify-content:center;gap:6px">
+          <i class="ti ti-brain"></i> Analyse IA
+        </button>
+      </div>
+      <div id="recoPanel1" style="border:0.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);margin-bottom:12px;overflow:hidden">
+        <div id="reco1Loading" style="padding:20px;text-align:center;display:none">
+          <div class="loading-spinner" style="width:28px;height:28px;margin:0 auto 10px"></div>
+          <p style="font-size:13px;color:var(--text2)">Recherche HAS et OMS en cours...</p>
+        </div>
+        <div id="reco1Content" style="padding:14px 16px;font-size:14px;line-height:1.75;color:var(--text);white-space:pre-wrap"></div>
+        <div id="reco1Sources" style="border-top:0.5px solid var(--border);padding:12px 16px;background:var(--bg2)"></div>
+      </div>
+      <div id="recoPanel2" style="display:none;border:0.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);margin-bottom:12px;overflow:hidden">
+        <div id="reco2Loading" style="padding:20px;text-align:center;display:none">
+          <div class="loading-spinner" style="width:28px;height:28px;margin:0 auto 10px"></div>
+          <p style="font-size:13px;color:var(--text2)">Analyse IA en cours...</p>
+        </div>
+        <div id="reco2Content" style="padding:14px 16px;font-size:14px;line-height:1.75;color:var(--text);white-space:pre-wrap"></div>
+        <div id="reco2Sources" style="border-top:0.5px solid var(--border);padding:12px 16px;background:var(--bg2)"></div>
+      </div>
       <div class="result-card">
         <div class="result-card-header" style="color:var(--amber)">
           <i class="ti ti-list-check"></i> Plan de soin immédiat
         </div>
         <div class="result-card-body" id="planContent"></div>
-      </div>
-      <div class="result-card">
-        <div class="result-card-header" style="color:var(--blue)">
-          <i class="ti ti-world"></i> Recommandations OMS gériatrie
-        </div>
-        <div class="result-card-body" id="omsContent"></div>
       </div>
       <div class="result-card">
         <div class="result-card-header" style="color:var(--text2)">
@@ -340,6 +358,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       </div>
     </div>
     <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Clé API Tavily (recherche HAS/OMS)</label>
+      <div class="key-input-wrap">
+        <input type="password" id="tavilyKey" placeholder="tvly-..." oninput="saveConfig()" style="font-size:12px;font-family:monospace"/>
+        <button class="key-toggle" onclick="toggleVis('tavilyKey')">Voir</button>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
       <label class="form-label">Supabase URL</label>
       <input type="text" id="supabaseUrl" placeholder="https://xxxx.supabase.co" oninput="saveConfig()" style="font-size:12px;font-family:monospace"/>
     </div>
@@ -377,6 +402,7 @@ function showToast(msg){
 function loadConfig(){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
   if(cfg.claudeKey){document.getElementById('claudeKey').value=cfg.claudeKey;updateKeyStatus();}
+  if(cfg.tavilyKey)document.getElementById('tavilyKey').value=cfg.tavilyKey;
   if(cfg.supabaseUrl)document.getElementById('supabaseUrl').value=cfg.supabaseUrl;
   if(cfg.supabaseKey)document.getElementById('supabaseKey').value=cfg.supabaseKey;
   if(cfg.doctorName)document.getElementById('doctorName').value=cfg.doctorName;
@@ -385,6 +411,7 @@ function loadConfig(){
 function saveConfig(){
   const cfg={
     claudeKey:document.getElementById('claudeKey').value,
+    tavilyKey:document.getElementById('tavilyKey').value,
     supabaseUrl:document.getElementById('supabaseUrl').value,
     supabaseKey:document.getElementById('supabaseKey').value,
     doctorName:document.getElementById('doctorName').value
@@ -467,6 +494,50 @@ async function callClaude(prompt,systemContext){
   return data.content[0].text;
 }
 
+function switchReco(n){
+  const t1=document.getElementById('recoTab1');
+  const t2=document.getElementById('recoTab2');
+  const p1=document.getElementById('recoPanel1');
+  const p2=document.getElementById('recoPanel2');
+  if(n===1){
+    t1.style.background='var(--blue)';t1.style.color='white';
+    t2.style.background='var(--bg2)';t2.style.color='var(--text2)';
+    p1.style.display='block';p2.style.display='none';
+  } else {
+    t2.style.background='var(--teal)';t2.style.color='white';
+    t1.style.background='var(--bg2)';t1.style.color='var(--text2)';
+    p2.style.display='block';p1.style.display='none';
+  }
+}
+
+function renderSources(sources, containerId){
+  const el=document.getElementById(containerId);
+  if(!sources||sources.length===0){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML='<div style="font-size:11px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Sources</div>'+
+    sources.map((s,i)=>'<div style="margin-bottom:8px;padding:8px 10px;background:var(--bg);border-radius:var(--radius);border:0.5px solid var(--border)">'+
+      '<div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px">'+(i+1)+'. '+s.title+'</div>'+
+      (s.date?'<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+s.date+'</div>':'')+
+      '<a href="'+s.url+'" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none;word-break:break-all">'+s.url+'</a>'+
+      '</div>'
+    ).join('');
+}
+
+async function searchTavily(query){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.tavilyKey)return null;
+  try{
+    const res=await fetch('https://api.tavily.com/search',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({api_key:cfg.tavilyKey,query,search_depth:'advanced',max_results:5,include_domains:['has-sante.fr','who.int','sfgg.fr','srlf.org','legifrance.gouv.fr','ameli.fr','ansm.sante.fr']})
+    });
+    if(!res.ok)return null;
+    const data=await res.json();
+    return data.results||[];
+  }catch(e){return null;}
+}
+
 async function analyzePatient(){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
   if(!cfg.claudeKey){openConfig();return;}
@@ -478,29 +549,63 @@ async function analyzePatient(){
   document.getElementById('form-section').style.display='none';
   document.getElementById('loadingState').style.display='block';
   document.getElementById('resultSection').style.display='none';
-  const sys=`Tu es un assistant médical spécialisé en gériatrie pour un médecin en France.
-Tu bases tes recommandations sur les guidelines OMS et HAS pour les patients âgés.
-IMPORTANT: Tu fournis uniquement une aide à la décision médicale. Le médecin reste seul responsable.
-Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
-{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","recommandations_oms":"string","vigilance":"string","resume_court":"string en 2 lignes max"}`;
-  const prompt=`Patient: ${ref}, ${age?age+' ans':'âge non précisé'}, ${sexe==='F'?'Femme':sexe==='M'?'Homme':'sexe non précisé'}
-Symptômes: ${selectedSymptoms.length>0?selectedSymptoms.join(', '):'voir notes'}
-Notes cliniques: ${notes||'voir symptômes'}
-${attachedFileText?'Document joint:\n'+attachedFileText.substring(0,2000):''}`;
+
+  const patientDesc='Patient: '+ref+', '+(age?age+' ans':'âge non précisé')+', '+(sexe==='F'?'Femme':sexe==='M'?'Homme':'sexe non précisé')+
+    '\nSymptômes: '+(selectedSymptoms.length>0?selectedSymptoms.join(', '):'voir notes')+
+    '\nNotes cliniques: '+(notes||'voir symptômes')+
+    (attachedFileText?'\nDocument joint:\n'+attachedFileText.substring(0,2000):'');
+
+  const sysDiag='Tu es un assistant médical spécialisé en gériatrie pour un médecin en France. Aide à la décision uniquement — le médecin reste seul responsable.\nRéponds UNIQUEMENT en JSON valide:\n{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","vigilance":"string","resume_court":"string 2 lignes max","mots_cles_recherche":"string — 3 à 5 mots-clés médicaux pour recherche HAS/OMS"}';
+
   try{
-    const raw=await callClaude(prompt,sys);
-    const m=raw.match(/\{[\s\S]*\}/);
+    // Step 1: diagnostic de base
+    const rawDiag=await callClaude(patientDesc, sysDiag);
+    const m=rawDiag.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Réponse invalide');
     const result=JSON.parse(m[0]);
+
     currentAnalysis={id:Date.now(),date:new Date().toISOString(),patientRef:ref,age,sexe,symptomes:[...selectedSymptoms],notes,result};
     analysisHistory.unshift(currentAnalysis);
     saveToLocalHistory();
     await saveToSupabase(currentAnalysis);
+
     document.getElementById('loadingState').style.display='none';
     document.getElementById('resultSection').style.display='block';
     renderResult(result);
+
+    // Step 2: Reco 1 — HAS/OMS avec Tavily
+    document.getElementById('reco1Loading').style.display='block';
+    document.getElementById('reco1Content').textContent='';
+    const keywords=result.mots_cles_recherche||selectedSymptoms.slice(0,3).join(' ')+' gériatrie';
+    const tavilyResults=await searchTavily('recommandations HAS OMS '+keywords+' personne âgée gériatrie');
+    let sourcesContext='';
+    let sources1=[];
+    if(tavilyResults&&tavilyResults.length>0){
+      sources1=tavilyResults.map(r=>({title:r.title,url:r.url,date:r.published_date||''}));
+      sourcesContext='\n\nSOURCES DISPONIBLES (cite-les précisément dans ta réponse avec [Source N]):\n'+
+        tavilyResults.map((r,i)=>'[Source '+(i+1)+'] '+r.title+'\nURL: '+r.url+'\nContenu: '+r.content.substring(0,500)).join('\n\n');
+    }
+    const sysReco1='Tu es un assistant médical. Rédige des recommandations cliniques UNIQUEMENT basées sur les sources HAS, OMS et recommandations officielles françaises fournies. Pour chaque recommandation, cite la source exacte avec [Source N]. Si une source ne concerne pas directement le cas, ne la cite pas. Sois précis et cliniquement utile. Commence par "Recommandations basées sur les sources officielles :"';
+    const reco1Text=await callClaude(patientDesc+sourcesContext, sysReco1);
+    document.getElementById('reco1Loading').style.display='none';
+    document.getElementById('reco1Content').textContent=reco1Text;
+    renderSources(sources1,'reco1Sources');
+
+    // Step 3: Reco 2 — Analyse IA libre
+    document.getElementById('reco2Loading').style.display='block';
+    document.getElementById('reco2Content').textContent='';
+    const sysReco2='Tu es un expert en gériatrie. Fournis une analyse clinique approfondie basée sur ton raisonnement médical, la littérature récente et les meilleures pratiques internationales. Va au-delà des recommandations officielles si pertinent. Cite tes sources (auteurs, revue, année, URL si connue) pour chaque point important. Commence par "Analyse et recommandations IA :"';
+    const reco2Text=await callClaude(patientDesc, sysReco2);
+    document.getElementById('reco2Loading').style.display='none';
+    document.getElementById('reco2Content').textContent=reco2Text;
+    // Extract sources mentioned in reco2
+    const sources2=[{title:'Analyse basée sur le raisonnement clinique de Claude (Anthropic)',url:'https://anthropic.com',date:new Date().toLocaleDateString('fr-FR')}];
+    renderSources(sources2,'reco2Sources');
+
   }catch(e){
     document.getElementById('loadingState').style.display='none';
+    document.getElementById('reco1Loading').style.display='none';
+    document.getElementById('reco2Loading').style.display='none';
     document.getElementById('form-section').style.display='block';
     showToast('Erreur: '+e.message);
   }
@@ -509,11 +614,15 @@ ${attachedFileText?'Document joint:\n'+attachedFileText.substring(0,2000):''}`;
 function renderResult(r){
   document.getElementById('diagContent').textContent=r.diagnostic;
   document.getElementById('planContent').textContent=r.plan_immediat;
-  document.getElementById('omsContent').textContent=r.recommandations_oms;
   document.getElementById('vigilanceContent').textContent=r.vigilance;
   const map={FAIBLE:['badge-success','Urgence faible'],MODÉRÉE:['badge-warning','Urgence modérée'],ÉLEVÉE:['badge-danger','Urgence élevée'],CRITIQUE:['badge-danger','⚠ CRITIQUE']};
   const [cls,label]=map[r.urgence]||['badge-warning',r.urgence];
   document.getElementById('urgencyBadge').innerHTML='<span class="badge '+cls+'">'+label+'</span>';
+  document.getElementById('reco1Content').textContent='';
+  document.getElementById('reco2Content').textContent='';
+  document.getElementById('reco1Sources').innerHTML='';
+  document.getElementById('reco2Sources').innerHTML='';
+  switchReco(1);
 }
 
 async function generateReport(){
