@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.1.1</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.1.2</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -582,56 +582,28 @@ async function searchPatientHistory(ref, age, sexe, symptoms, notes){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
   if(!cfg.supabaseUrl||!cfg.supabaseKey)return null;
   try{
-    // Charge toutes les gardes du service
-    const url=cfg.supabaseUrl+'/rest/v1/gardes?select=patient_id,date_garde,medecin,symptomes,diagnostic_ia,plan_action,notes_brutes&order=date_garde.desc&limit=200';
+    // Charge toutes les releves brutes depuis rapports_garde_mails
+    const url=cfg.supabaseUrl+'/rest/v1/rapports_garde_mails?select=date_garde,expediteur,sujet,contenu_brut&order=date_garde.desc&limit=200';
     const res=await fetch(url,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
     if(!res.ok)return null;
-    const gardes=await res.json();
-    if(!gardes||gardes.length===0)return null;
+    const releves=await res.json();
+    if(!releves||releves.length===0)return null;
 
-    // Mots-clés de recherche: symptômes sélectionnés + mots des notes cliniques
+    // Mots-cles: symptomes selectionnes + mots des notes cliniques
     const keywords=[...symptoms];
     if(notes){
-      // Extraire mots significatifs des notes (longueur > 4)
-      const noteWords=notes.split(/\s+/).filter(w=>w.length>4).map(w=>w.toLowerCase().replace(/[^a-zàâéèêëîïôùûüç]/g,''));
+      const noteWords=notes.split(/\s+/).filter(w=>w.length>4).map(w=>w.toLowerCase());
       keywords.push(...noteWords.slice(0,10));
     }
 
-    // Score chaque garde selon nombre de mots-clés correspondants
-    const scored=gardes.map(g=>{
-      let score=0;
-      const gSymptomes=(g.symptomes||[]).join(' ').toLowerCase();
-      const gDiag=(g.diagnostic_ia||'').toLowerCase();
-      const gPlan=(g.plan_action||'').toLowerCase();
-      const gNotes=(g.notes_brutes||'').toLowerCase();
-      const gAll=gSymptomes+' '+gDiag+' '+gPlan+' '+gNotes;
-      keywords.forEach(kw=>{
-        if(kw.length<4)return;
-        const kwLow=kw.toLowerCase();
-        if(gSymptomes.includes(kwLow))score+=3; // symptôme exact = poids fort
-        else if(gDiag.includes(kwLow))score+=2;
-        else if(gAll.includes(kwLow))score+=1;
-      });
-      return {...g, score};
-    }).filter(g=>g.score>0).sort((a,b)=>b.score-a.score);
+    // Filtrer les releves qui contiennent au moins un mot-cle dans le texte brut
+    const relevant=releves.filter(r=>{
+      const texte=(r.contenu_brut||'').toLowerCase();
+      return keywords.some(kw=>kw.length>=4&&texte.includes(kw.toLowerCase()));
+    });
 
-    if(scored.length===0)return null;
-
-    // Prend toutes les gardes pertinentes (score > 0), max 20
-    const relevant=scored.slice(0,20);
-
-    // Charge données médicales des patients concernés
-    const patientIds=[...new Set(relevant.map(g=>g.patient_id))];
-    const medUrl=cfg.supabaseUrl+'/rest/v1/patients_medicaux?id=in.('+patientIds.join(',')+')&select=id,age,sexe,antecedents,traitements';
-    const medRes=await fetch(medUrl,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
-    const medData=medRes.ok?await medRes.json():[];
-
-    // Charge identités (sans noms — juste chambre et service)
-    const idUrl=cfg.supabaseUrl+'/rest/v1/patients_identites?id=in.('+patientIds.join(',')+')&select=id,chambre,etablissement';
-    const idRes=await fetch(idUrl,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
-    const idData=idRes.ok?await idRes.json():[];
-
-    return {gardes:relevant, patients:medData, identites:idData, total:scored.length};
+    if(relevant.length===0)return null;
+    return {releves:relevant, total:releves.length};
   }catch(e){
     console.log('Historique skip:',e.message);
     return null;
@@ -639,27 +611,8 @@ async function searchPatientHistory(ref, age, sexe, symptoms, notes){
 }
 
 function formatHistoryContext(history){
-  if(!history||!history.gardes||history.gardes.length===0)return '';
-  let ctx='\n\n=== HISTORIQUE COMPLET DU SERVICE ('+history.gardes.length+' cas pertinents sur '+history.total+' gardes) ===\n';
-  ctx+='Voici TOUTES les situations cliniques similaires déjà gérées dans ce service. Utilise cet historique pour enrichir ton analyse:\n\n';
-  history.gardes.forEach((g,i)=>{
-    const d=new Date(g.date_garde).toLocaleDateString('fr-FR');
-    // Trouver chambre/service du patient
-    const id=history.identites?history.identites.find(x=>x.id===g.patient_id):null;
-    const med=history.patients?history.patients.find(x=>x.id===g.patient_id):null;
-    const lieu=id?(id.etablissement||'')+(id.chambre?' ch'+id.chambre:''):'';
-    ctx+='--- Garde du '+d+' ('+g.medecin+(lieu?' — '+lieu:'')+') ---\n';
-    if(med&&med.antecedents&&med.antecedents.length>0){
-      ctx+='Antécédents patient: '+med.antecedents.join(', ')+'\n';
-    }
-    ctx+='Symptômes: '+(g.symptomes||[]).join(', ')+'\n';
-    if(g.diagnostic_ia)ctx+='Diagnostic posé: '+g.diagnostic_ia+'\n';
-    if(g.plan_action)ctx+='Plan appliqué: '+g.plan_action+'\n';
-    if(g.notes_brutes)ctx+='Notes: '+g.notes_brutes+'\n';
-    ctx+='\n';
-  });
-  ctx+='=== FIN HISTORIQUE ===\n';
-  return ctx;
+  // Ne plus envoyer a Claude — juste retourner vide, on affiche directement dans renderResult
+  return '';
 }
 
 async function analyzePatient(){
@@ -691,7 +644,7 @@ async function analyzePatient(){
     (attachedFileText?'\nDocument joint:\n'+attachedFileText.substring(0,2000):'')+
     historyContext;
 
-  const sysDiag='Tu es un assistant médical spécialisé en gériatrie pour un médecin en France. Aide à la décision uniquement — le médecin reste seul responsable.\nSi un historique du service est fourni, utilise-le pour enrichir ton analyse (mentionner ce qui a fonctionné avant, les patterns récurrents).\nRéponds UNIQUEMENT en JSON valide:\n{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","vigilance":"string","resume_court":"string 2 lignes max","mots_cles_recherche":"string — 3 à 5 mots-clés médicaux pour recherche HAS/OMS","historique_pertinent":"string ou null si pas historique pertinent"}';
+  const sysDiag='Tu es un assistant médical spécialisé en gériatrie pour un médecin en France. Aide à la décision uniquement — le médecin reste seul responsable.\nSi un historique du service est fourni, utilise-le pour enrichir ton analyse (mentionner ce qui a fonctionné avant, les patterns récurrents).\nRéponds UNIQUEMENT en JSON valide:\n{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","vigilance":"string","resume_court":"string 2 lignes max","mots_cles_recherche":"string — 3 à 5 mots-clés médicaux pour recherche HAS/OMS","vigilance_extra":"string ou null"}';
 
   try{
     // Step 1: diagnostic de base enrichi par historique
@@ -709,6 +662,10 @@ async function analyzePatient(){
     document.getElementById('loadingState').style.display='none';
     document.getElementById('resultSection').style.display='block';
     renderResult(result);
+    // Afficher les releves brutes directement sans IA
+    if(history&&history.releves&&history.releves.length>0){
+      displayRawHistory(history.releves);
+    }
 
     // Step 2: Reco 1 — HAS/OMS avec Tavily
     document.getElementById('reco1Loading').style.display='block';
@@ -755,14 +712,8 @@ function renderResult(r){
   const map={FAIBLE:['badge-success','Urgence faible'],MODÉRÉE:['badge-warning','Urgence modérée'],ÉLEVÉE:['badge-danger','Urgence élevée'],CRITIQUE:['badge-danger','⚠ CRITIQUE']};
   const [cls,label]=map[r.urgence]||['badge-warning',r.urgence];
   document.getElementById('urgencyBadge').innerHTML='<span class="badge '+cls+'">'+label+'</span>';
-  // Afficher historique pertinent si disponible
-  const histEl=document.getElementById('histCard');
-  if(r.historique_pertinent&&r.historique_pertinent!='null'&&r.historique_pertinent!==null){
-    histEl.style.display='block';
-    document.getElementById('histContent').textContent=r.historique_pertinent;
-  } else {
-    histEl.style.display='none';
-  }
+  // Historique brut affiché séparément via displayRawHistory()
+  document.getElementById('histCard').style.display='none';
   document.getElementById('reco1Content').textContent='';
   document.getElementById('reco2Content').textContent='';
   document.getElementById('reco1Sources').innerHTML='';
@@ -1042,6 +993,32 @@ function toggleReleve(i){
 
 function renderHistory(){
   // Maintenant géré par loadAllReleves + searchReleves
+}
+
+function displayRawHistory(releves){
+  const el=document.getElementById('histCard');
+  const content=document.getElementById('histContent');
+  el.style.display='block';
+  let html='<div style="font-size:12px;color:#666;margin-bottom:8px">'+releves.length+' releve(s) du service contenant ces mots-clés — texte brut :</div>';
+  releves.forEach((r,i)=>{
+    const d=r.date_garde?new Date(r.date_garde).toLocaleDateString('fr-FR'):'Date inconnue';
+    const titre=(r.sujet||r.expediteur||'Releve')+' — '+d;
+    html+='<div style="border:1px solid #e0e0e0;border-radius:6px;margin-bottom:10px;overflow:hidden">';
+    html+='<div style="background:#085041;color:white;padding:6px 10px;font-size:12px;font-weight:bold;cursor:pointer" onclick="toggleHist('+i+')">'+
+      titre+' <span id="histArrow'+i+'">▼</span></div>';
+    html+='<div id="histRaw'+i+'" style="display:none;white-space:pre-wrap;font-size:12px;line-height:1.6;padding:10px;color:#333;font-family:monospace">'+
+      (r.contenu_brut||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+    html+='</div>';
+  });
+  content.innerHTML=html;
+}
+
+function toggleHist(i){
+  const el=document.getElementById('histRaw'+i);
+  const arrow=document.getElementById('histArrow'+i);
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  arrow.textContent=open?'▼':'▲';
 }
 
 function loadAnalysis(id){
