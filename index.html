@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.1.2</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.1.3</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -578,15 +578,37 @@ async function searchTavily(query){
   }catch(e){return null;}
 }
 
+async function preloadReleves(){
+  // Precharge les releves en arriere-plan et les met en cache
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.supabaseUrl||!cfg.supabaseKey)return;
+  try{
+    const url=cfg.supabaseUrl+'/rest/v1/rapports_garde_mails?select=date_garde,expediteur,sujet,contenu_brut&order=date_garde.desc&limit=300';
+    const res=await fetch(url,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
+    if(!res.ok)return;
+    const data=await res.json();
+    if(data&&data.length>0){
+      cachedReleves=data;
+      console.log('Releves en cache:',data.length);
+    }
+  }catch(e){
+    console.log('Preload skip:',e.message);
+  }
+}
+
 async function searchPatientHistory(ref, age, sexe, symptoms, notes){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
   if(!cfg.supabaseUrl||!cfg.supabaseKey)return null;
   try{
-    // Charge toutes les releves brutes depuis rapports_garde_mails
-    const url=cfg.supabaseUrl+'/rest/v1/rapports_garde_mails?select=date_garde,expediteur,sujet,contenu_brut&order=date_garde.desc&limit=200';
-    const res=await fetch(url,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
-    if(!res.ok)return null;
-    const releves=await res.json();
+    // Utiliser le cache si disponible, sinon charger
+    let releves=cachedReleves;
+    if(!releves){
+      const url=cfg.supabaseUrl+'/rest/v1/rapports_garde_mails?select=date_garde,expediteur,sujet,contenu_brut&order=date_garde.desc&limit=300';
+      const res=await fetch(url,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
+      if(!res.ok)return null;
+      releves=await res.json();
+      cachedReleves=releves; // Mettre en cache pour la prochaine fois
+    }
     if(!releves||releves.length===0)return null;
 
     // Mots-cles: symptomes selectionnes + mots des notes cliniques
@@ -595,6 +617,7 @@ async function searchPatientHistory(ref, age, sexe, symptoms, notes){
       const noteWords=notes.split(/\s+/).filter(w=>w.length>4).map(w=>w.toLowerCase());
       keywords.push(...noteWords.slice(0,10));
     }
+    if(keywords.length===0)return null;
 
     // Filtrer les releves qui contiennent au moins un mot-cle dans le texte brut
     const relevant=releves.filter(r=>{
@@ -871,6 +894,7 @@ function loadHistory(){
 }
 
 let allReleves=[];
+let cachedReleves=null; // Cache des releves pour l'analyse
 
 async function loadAllReleves(){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
@@ -1114,6 +1138,8 @@ loadConfig();
 loadHistory();
 document.addEventListener('DOMContentLoaded', initSymptomTags);
 if(document.readyState!=='loading') initSymptomTags();
+// Precharger les releves en arriere-plan au demarrage
+setTimeout(preloadReleves, 2000);
 </script>
 </body>
 </html>
