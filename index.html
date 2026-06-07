@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.0.7</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.0.8</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -202,22 +202,30 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
         <div>
           <div class="section-label">Symptômes — appuyez pour sélectionner</div>
           <div class="symptom-tags" id="symptomTags">
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Chute</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Confusion / Démence</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Dyspnée</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Douleur thoracique</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Fièvre</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Hypotension</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Déshydratation</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Escarre</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Trouble de la marche</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Polypharmacie</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Dénutrition</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Agitation nocturne</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Insuffisance cardiaque</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Rétention urinaire</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">AVC / AIT</span>
-            <span class="symptom-tag" onclick="toggleSymptom(this)">Douleur aiguë</span>
+            <span class="symptom-tag">Chute</span>
+            <span class="symptom-tag">Confusion / Démence</span>
+            <span class="symptom-tag">Dyspnée</span>
+            <span class="symptom-tag">Douleur thoracique</span>
+            <span class="symptom-tag">Fièvre</span>
+            <span class="symptom-tag">Hypotension</span>
+            <span class="symptom-tag">Déshydratation</span>
+            <span class="symptom-tag">Escarre</span>
+            <span class="symptom-tag">Trouble de la marche</span>
+            <span class="symptom-tag">Polypharmacie</span>
+            <span class="symptom-tag">Dénutrition</span>
+            <span class="symptom-tag">Agitation nocturne</span>
+            <span class="symptom-tag">Insuffisance cardiaque</span>
+            <span class="symptom-tag">Rétention urinaire</span>
+            <span class="symptom-tag">AVC / AIT</span>
+            <span class="symptom-tag">Douleur aiguë</span>
+            <span class="symptom-tag">Sepsis</span>
+            <span class="symptom-tag">Infection urinaire</span>
+            <span class="symptom-tag">Pneumopathie</span>
+            <span class="symptom-tag">Fin de vie / NDS4</span>
+            <span class="symptom-tag">Hypokaliémie</span>
+            <span class="symptom-tag">Décompensation cardiaque</span>
+            <span class="symptom-tag">Bactériémie</span>
+            <span class="symptom-tag">Chute avec TC</span>
           </div>
         </div>
         <div class="form-group">
@@ -461,9 +469,28 @@ function switchTab(tab){
 
 function toggleSymptom(el){
   el.classList.toggle('selected');
-  const s=el.textContent;
-  if(el.classList.contains('selected')){selectedSymptoms.push(s);}
-  else{selectedSymptoms=selectedSymptoms.filter(x=>x!==s);}
+  const s=el.textContent.trim();
+  if(el.classList.contains('selected')){
+    if(!selectedSymptoms.includes(s))selectedSymptoms.push(s);
+  } else {
+    selectedSymptoms=selectedSymptoms.filter(x=>x!==s);
+  }
+}
+
+function initSymptomTags(){
+  const tags=document.querySelectorAll('.symptom-tag');
+  tags.forEach(tag=>{
+    tag.addEventListener('click',function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSymptom(this);
+    });
+    tag.addEventListener('touchend',function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSymptom(this);
+    });
+  });
 }
 
 function handleFile(event){
@@ -959,6 +986,8 @@ async function saveToSupabase(analysis){
 
 loadConfig();
 loadHistory();
+document.addEventListener('DOMContentLoaded', initSymptomTags);
+if(document.readyState!=='loading') initSymptomTags();
 </script>
 </body>
 </html>
