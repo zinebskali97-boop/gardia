@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.1.3</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.1.5</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -270,12 +270,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
         <div class="result-card-body" id="diagContent"></div>
       </div>
       <div style="display:flex;gap:0;margin-bottom:0;border:0.5px solid var(--border);border-radius:var(--radius-lg) var(--radius-lg) 0 0;overflow:hidden">
-        <button id="recoTab1" onclick="switchReco(1)" style="flex:1;padding:11px 8px;font-size:13px;font-weight:500;border:none;cursor:pointer;font-family:var(--font-body);background:var(--blue);color:white;display:flex;align-items:center;justify-content:center;gap:6px;border-right:0.5px solid var(--border)">
+        <button id="recoTab1" onclick="switchReco(1)" style="flex:1;padding:11px 8px;font-size:13px;font-weight:500;border:none;cursor:pointer;font-family:var(--font-body);background:var(--blue);color:white;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:var(--radius-lg) var(--radius-lg) 0 0">
           <i class="ti ti-certificate"></i> HAS / OMS
         </button>
-        <button id="recoTab2" onclick="switchReco(2)" style="flex:1;padding:11px 8px;font-size:13px;font-weight:500;border:none;cursor:pointer;font-family:var(--font-body);background:var(--bg2);color:var(--text2);display:flex;align-items:center;justify-content:center;gap:6px">
-          <i class="ti ti-brain"></i> Analyse IA
-        </button>
+
       </div>
       <div id="recoPanel1" style="border:0.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);margin-bottom:12px;overflow:hidden">
         <div id="reco1Loading" style="padding:20px;text-align:center;display:none">
@@ -285,14 +283,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
         <div id="reco1Content" style="padding:14px 16px;font-size:14px;line-height:1.75;color:var(--text);white-space:pre-wrap"></div>
         <div id="reco1Sources" style="border-top:0.5px solid var(--border);padding:12px 16px;background:var(--bg2)"></div>
       </div>
-      <div id="recoPanel2" style="display:none;border:0.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius-lg) var(--radius-lg);margin-bottom:12px;overflow:hidden">
-        <div id="reco2Loading" style="padding:20px;text-align:center;display:none">
-          <div class="loading-spinner" style="width:28px;height:28px;margin:0 auto 10px"></div>
-          <p style="font-size:13px;color:var(--text2)">Analyse IA en cours...</p>
-        </div>
-        <div id="reco2Content" style="padding:14px 16px;font-size:14px;line-height:1.75;color:var(--text);white-space:pre-wrap"></div>
-        <div id="reco2Sources" style="border-top:0.5px solid var(--border);padding:12px 16px;background:var(--bg2)"></div>
-      </div>
+
       <div class="result-card" id="histCard" style="display:none">
         <div class="result-card-header" style="color:#639922">
           <i class="ti ti-history"></i> Ce que l'historique du service apporte
@@ -708,21 +699,12 @@ async function analyzePatient(){
     document.getElementById('reco1Content').textContent=reco1Text;
     renderSources(sources1,'reco1Sources');
 
-    // Step 3: Reco 2 — Analyse IA libre
-    document.getElementById('reco2Loading').style.display='block';
-    document.getElementById('reco2Content').textContent='';
-    const sysReco2='Tu es un expert en gériatrie. Fournis une analyse clinique approfondie basée sur ton raisonnement médical, la littérature récente et les meilleures pratiques internationales. Va au-delà des recommandations officielles si pertinent. Cite tes sources (auteurs, revue, année, URL si connue) pour chaque point important. Commence par "Analyse et recommandations IA :"';
-    const reco2Text=await callClaude(patientDesc, sysReco2);
-    document.getElementById('reco2Loading').style.display='none';
-    document.getElementById('reco2Content').textContent=reco2Text;
-    // Extract sources mentioned in reco2
-    const sources2=[{title:'Analyse basée sur le raisonnement clinique de Claude (Anthropic)',url:'https://anthropic.com',date:new Date().toLocaleDateString('fr-FR')}];
-    renderSources(sources2,'reco2Sources');
+    // Analyse IA supprimee — HAS/OMS suffit
 
   }catch(e){
     document.getElementById('loadingState').style.display='none';
     document.getElementById('reco1Loading').style.display='none';
-    document.getElementById('reco2Loading').style.display='none';
+    
     document.getElementById('form-section').style.display='block';
     showToast('Erreur: '+e.message);
   }
@@ -738,9 +720,9 @@ function renderResult(r){
   // Historique brut affiché séparément via displayRawHistory()
   document.getElementById('histCard').style.display='none';
   document.getElementById('reco1Content').textContent='';
-  document.getElementById('reco2Content').textContent='';
+  
   document.getElementById('reco1Sources').innerHTML='';
-  document.getElementById('reco2Sources').innerHTML='';
+  
   switchReco(1);
 }
 
