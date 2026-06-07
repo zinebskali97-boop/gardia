@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.1.8</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.1.9</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -643,13 +643,10 @@ async function analyzePatient(){
   document.getElementById('resultSection').style.display='none';
 
   // Recherche historique Supabase
+  document.getElementById('loadingState').querySelector('small').textContent='Analyse en cours...';
   const history=await searchPatientHistory(ref, age, sexe, selectedSymptoms, notes);
-  const historyContext=formatHistoryContext(history);
-  if(history&&history.gardes.length>0){
-    document.getElementById('loadingState').querySelector('small').textContent='Historique trouvé - Analyse en cours...';
-    showToast(history.gardes.length+' releve(s) pertinente(s) trouvee(s) dans historique');
-  } else {
-    document.getElementById('loadingState').querySelector('small').textContent='Analyse en cours...';
+  if(history&&history.releves&&history.releves.length>0){
+    showToast(history.releves.length+' releve(s) trouvee(s) dans historique');
   }
 
   // Ne pas envoyer l'historique brut à Claude — trop long, ralentit tout
