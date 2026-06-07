@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.1.0</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.1.1</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -347,10 +347,17 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
 
   <!-- HISTORIQUE TAB -->
   <div class="tab-content" id="content-historique">
-    <div id="histEmpty" class="empty-state">
-      <i class="ti ti-history"></i>
-      <p>Aucune analyse enregistrée</p>
-      <small>Vos analyses apparaîtront ici automatiquement</small>
+    <div style="margin-bottom:14px">
+      <div style="position:relative">
+        <input type="text" id="histSearch" placeholder="Rechercher dans les relèves... ex: fièvre, IU, sepsis, chute" oninput="searchReleves(this.value)" style="width:100%;padding-right:40px"/>
+        <i class="ti ti-search" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:16px"></i>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px" id="histCount"></div>
+    </div>
+    <div id="histEmpty" class="empty-state" style="display:none">
+      <i class="ti ti-search"></i>
+      <p>Aucune relève trouvée</p>
+      <small>Essayez un autre terme de recherche</small>
     </div>
     <div id="histList"></div>
   </div>
@@ -464,7 +471,7 @@ function switchTab(tab){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('content-'+tab).classList.add('active');
   document.getElementById('tab-'+tab).classList.add('active');
-  if(tab==='historique'){loadHistoryFromSupabase().then(()=>renderHistory());}
+  if(tab==='historique'){loadAllReleves();}
 }
 
 function toggleSymptom(el){
@@ -912,22 +919,129 @@ function loadHistory(){
   if(h)analysisHistory=JSON.parse(h);
 }
 
-function renderHistory(){
+let allReleves=[];
+
+async function loadAllReleves(){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.supabaseUrl||!cfg.supabaseKey){
+    document.getElementById('histCount').textContent='Configurez Supabase pour accéder aux relèves';
+    return;
+  }
+  try{
+    document.getElementById('histCount').textContent='Chargement des relèves...';
+    const url=cfg.supabaseUrl+'/rest/v1/gardes?select=patient_id,date_garde,medecin,symptomes,diagnostic_ia,plan_action,notes_brutes&order=date_garde.desc&limit=500';
+    const res=await fetch(url,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
+    if(!res.ok)return;
+    const gardes=await res.json();
+
+    // Charger aussi les rapports mails bruts
+    const mailUrl=cfg.supabaseUrl+'/rest/v1/rapports_garde_mails?select=date_garde,expediteur,sujet,contenu_brut&order=date_garde.desc&limit=100';
+    const mailRes=await fetch(mailUrl,{headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}});
+    const mails=mailRes.ok?await mailRes.json():[];
+
+    allReleves=[
+      ...gardes.map(g=>({
+        type:'garde',
+        date:g.date_garde,
+        medecin:g.medecin||'',
+        patient_id:g.patient_id||'',
+        symptomes:(g.symptomes||[]).join(', '),
+        texte:(g.diagnostic_ia||'')+' '+(g.plan_action||'')+' '+(g.notes_brutes||''),
+        texte_complet:buildGardeTexte(g)
+      })),
+      ...mails.filter(m=>m.sujet!=='Import historique gardes avril-juin 2026').map(m=>({
+        type:'mail',
+        date:m.date_garde||m.date_reception,
+        medecin:m.expediteur||'',
+        texte:(m.contenu_brut||''),
+        texte_complet:m.contenu_brut||''
+      }))
+    ];
+
+    document.getElementById('histCount').textContent=allReleves.length+' relève(s) dans la base — tapez pour rechercher';
+    searchReleves('');
+  }catch(e){
+    document.getElementById('histCount').textContent='Erreur chargement: '+e.message;
+  }
+}
+
+function buildGardeTexte(g){
+  let t='';
+  if(g.date_garde)t+='Date: '+new Date(g.date_garde).toLocaleDateString('fr-FR')+'\n';
+  if(g.medecin)t+='Médecin: '+g.medecin+'\n';
+  if(g.symptomes&&g.symptomes.length)t+='Symptômes: '+g.symptomes.join(', ')+'\n';
+  if(g.diagnostic_ia)t+='Diagnostic: '+g.diagnostic_ia+'\n';
+  if(g.plan_action)t+='Plan: '+g.plan_action+'\n';
+  if(g.notes_brutes)t+='Notes: '+g.notes_brutes+'\n';
+  return t;
+}
+
+function highlightText(text, query){
+  if(!query||query.length<2)return escHtml(text);
+  const escaped=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const re=new RegExp('('+escaped+')', 'gi');
+  return escHtml(text).replace(re,'<mark style="background:#fff3b0;border-radius:2px;padding:0 2px">$1</mark>');
+}
+
+function escHtml(t){
+  return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function searchReleves(query){
   const list=document.getElementById('histList');
   const empty=document.getElementById('histEmpty');
-  if(analysisHistory.length===0){empty.style.display='block';list.innerHTML='';return;}
+  const count=document.getElementById('histCount');
+  const q=query.trim().toLowerCase();
+
+  let results=allReleves;
+  if(q.length>=2){
+    results=allReleves.filter(r=>{
+      const searchIn=(r.texte+' '+r.symptomes+' '+r.medecin).toLowerCase();
+      // Supporte recherche multi-mots (tous doivent être présents)
+      const words=q.split(/\s+/).filter(w=>w.length>=2);
+      return words.every(w=>searchIn.includes(w));
+    });
+  }
+
+  if(results.length===0){
+    empty.style.display='block';
+    list.innerHTML='';
+    count.textContent=q?'Aucune relève pour "'+query+'"':allReleves.length+' relève(s) disponibles';
+    return;
+  }
+
   empty.style.display='none';
-  list.innerHTML=analysisHistory.map(a=>{
-    const d=new Date(a.date);
-    const ds=d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-    const uc={FAIBLE:'var(--teal)',MODÉRÉE:'var(--amber)',ÉLEVÉE:'var(--red)',CRITIQUE:'var(--red)'}[a.result?.urgence]||'var(--text2)';
-    return '<div class="history-item" onclick="loadAnalysis('+a.id+')">'+
-      '<div class="history-meta"><span class="history-patient">'+(a.patientId||'ID en cours')+(a.age?', '+a.age+' ans':'')+'</span><span class="history-date">'+ds+'</span></div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Réf: '+a.patientRef+'</div>'+
-      '<div class="history-preview">'+(a.result?.resume_court||a.result?.diagnostic?.substring(0,100)+'...')+'</div>'+
-      (a.result?.urgence?'<div style="margin-top:6px"><span style="font-size:11px;color:'+uc+';font-weight:500">'+a.result.urgence+'</span></div>':'')+
+  count.textContent=results.length+' relève(s)'+(q?' pour "'+query+'"':'');
+
+  list.innerHTML=results.map((r,i)=>{
+    const d=r.date?new Date(r.date).toLocaleDateString('fr-FR'):'Date inconnue';
+    const preview=r.texte_complet.substring(0,300);
+    const highlighted=q.length>=2?highlightText(preview,query):escHtml(preview);
+    return '<div class="history-item" onclick="toggleReleve('+i+')" id="releve-item-'+i+'">'+
+      '<div class="history-meta">'+
+      '<span class="history-patient" style="font-size:13px">'+escHtml(r.medecin||'Médecin')+'</span>'+
+      '<span class="history-date">'+d+'</span>'+
+      '</div>'+
+      (r.symptomes?'<div style="font-size:11px;color:var(--teal);margin-bottom:4px">'+escHtml(r.symptomes.substring(0,80))+'</div>':'')+
+      '<div class="history-preview" id="releve-preview-'+i+'">'+highlighted+'...</div>'+
+      '<div id="releve-full-'+i+'" style="display:none;font-size:13px;line-height:1.7;white-space:pre-wrap;color:var(--text);margin-top:8px;border-top:0.5px solid var(--border);padding-top:8px">'+escHtml(r.texte_complet)+'</div>'+
+      '<div style="font-size:11px;color:var(--teal);margin-top:6px">Appuyer pour voir la relève complète ▼</div>'+
       '</div>';
   }).join('');
+}
+
+function toggleReleve(i){
+  const full=document.getElementById('releve-full-'+i);
+  const preview=document.getElementById('releve-preview-'+i);
+  const item=document.getElementById('releve-item-'+i);
+  const isOpen=full.style.display!=='none';
+  full.style.display=isOpen?'none':'block';
+  preview.style.display=isOpen?'block':'none';
+  item.querySelector('div:last-child').textContent=isOpen?'Appuyer pour voir la relève complète ▼':'▲ Réduire';
+}
+
+function renderHistory(){
+  // Maintenant géré par loadAllReleves + searchReleves
 }
 
 function loadAnalysis(id){
