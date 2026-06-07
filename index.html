@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="theme-color" content="#1D9E75"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="GardIA"/>
+<title>GardIA — Assistant de garde gériatrique</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="icon.svg" type="image/svg+xml"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --teal:#1D9E75;--teal-light:#E1F5EE;--teal-dark:#085041;
+  --amber:#BA7517;--amber-light:#FAEEDA;
+  --red-light:#FCEBEB;--red:#A32D2D;
+  --blue:#185FA5;--blue-light:#E6F1FB;
+  --bg:#ffffff;--bg2:#f7f8f6;--bg3:#f0f2ef;
+  --text:#1a1a1a;--text2:#555;--text3:#888;
+  --border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.18);
+  --radius:10px;--radius-lg:14px;
+  --font-display:'DM Serif Display',serif;
+  --font-body:'DM Sans',sans-serif;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#0f1410;--bg2:#161d17;--bg3:#1c251d;
+    --text:#e8ede9;--text2:#9aab9c;--text3:#5f6e60;
+    --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
+  }
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);min-height:100vh;}
+.app{max-width:480px;margin:0 auto;padding-bottom:90px;min-height:100vh;}
+
+.header{padding:16px 20px 14px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg);position:sticky;top:0;z-index:10;}
+.header-left{display:flex;align-items:center;gap:10px;}
+.logo-mark{width:36px;height:36px;background:var(--teal);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:18px;}
+.app-name{font-family:var(--font-display);font-size:18px;color:var(--text);line-height:1;}
+.app-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+.config-btn{background:none;border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:4px;font-family:var(--font-body);}
+.config-btn:hover{background:var(--bg2);}
+
+.nav-tabs{display:flex;border-bottom:0.5px solid var(--border);padding:0 20px;background:var(--bg);position:sticky;top:65px;z-index:10;}
+.nav-tab{padding:12px 14px 10px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;color:var(--text2);font-weight:400;transition:all .15s;display:flex;align-items:center;gap:5px;font-family:var(--font-body);}
+.nav-tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:500;}
+
+.tab-content{display:none;padding:20px;}
+.tab-content.active{display:block;}
+
+.section-label{font-size:11px;font-weight:500;color:var(--text2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
+
+.patient-form{display:flex;flex-direction:column;gap:14px;}
+.form-row{display:flex;gap:10px;}
+.form-group{display:flex;flex-direction:column;gap:5px;flex:1;}
+.form-label{font-size:12px;color:var(--text2);font-weight:500;}
+
+input[type="text"],input[type="number"],input[type="email"],input[type="password"],select,textarea{
+  font-family:var(--font-body);font-size:14px;padding:9px 12px;
+  border:0.5px solid var(--border2);border-radius:var(--radius);
+  background:var(--bg);color:var(--text);width:100%;
+  -webkit-appearance:none;appearance:none;
+}
+textarea{resize:vertical;min-height:110px;line-height:1.6;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(29,158,117,.12);}
+
+.symptom-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.symptom-tag{padding:5px 11px;border-radius:20px;font-size:12px;cursor:pointer;border:0.5px solid var(--border2);background:var(--bg);color:var(--text2);transition:all .12s;font-family:var(--font-body);}
+.symptom-tag.selected{background:var(--teal);color:white;border-color:var(--teal);}
+
+.upload-zone{border:1.5px dashed var(--border2);border-radius:var(--radius-lg);padding:22px;text-align:center;cursor:pointer;transition:all .15s;background:var(--bg2);}
+.upload-zone:hover{border-color:var(--teal);background:var(--teal-light);}
+.upload-zone i{font-size:30px;color:var(--text3);margin-bottom:8px;display:block;}
+.upload-zone p{font-size:13px;color:var(--text2);}
+.upload-zone span{font-size:11px;color:var(--text3);margin-top:4px;display:block;}
+#fileInput{display:none;}
+
+.file-preview{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--teal-light);border-radius:var(--radius);border:0.5px solid rgba(29,158,117,.3);}
+.file-preview i{font-size:20px;color:var(--teal);}
+.file-preview-name{font-size:13px;color:var(--teal-dark);font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.file-remove{background:none;border:none;cursor:pointer;color:var(--text2);font-size:18px;padding:0 4px;}
+
+.btn-analyze{width:100%;padding:14px;background:var(--teal);color:white;border:none;border-radius:var(--radius-lg);font-size:15px;font-weight:500;cursor:pointer;font-family:var(--font-body);display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;margin-top:6px;}
+.btn-analyze:hover{background:var(--teal-dark);}
+.btn-analyze:disabled{opacity:.6;cursor:not-allowed;}
+
+.btn-secondary{padding:10px 14px;background:none;border:0.5px solid var(--border2);border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:var(--font-body);color:var(--text);display:flex;align-items:center;gap:6px;transition:all .12s;}
+.btn-secondary:hover{background:var(--bg2);}
+
+.loading-state{display:none;text-align:center;padding:50px 20px;}
+.loading-spinner{width:44px;height:44px;border:3px solid var(--teal-light);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-state p{font-size:14px;color:var(--text2);}
+.loading-state small{font-size:12px;color:var(--text3);margin-top:6px;display:block;}
+
+.result-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;}
+.result-card-header{padding:12px 16px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;gap:8px;font-weight:500;font-size:14px;}
+.result-card-header i{font-size:16px;}
+.result-card-body{padding:14px 16px;font-size:14px;line-height:1.75;color:var(--text);white-space:pre-wrap;}
+
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;}
+.badge-success{background:var(--teal-light);color:var(--teal-dark);}
+.badge-warning{background:var(--amber-light);color:var(--amber);}
+.badge-danger{background:var(--red-light);color:var(--red);}
+
+.result-actions{display:flex;gap:8px;padding:14px 0 0;flex-wrap:wrap;}
+
+.history-item{padding:14px;border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:10px;background:var(--bg);cursor:pointer;transition:all .12s;}
+.history-item:hover{border-color:var(--teal);}
+.history-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.history-patient{font-weight:500;font-size:14px;}
+.history-date{font-size:12px;color:var(--text2);}
+.history-preview{font-size:13px;color:var(--text2);line-height:1.5;}
+
+.empty-state{text-align:center;padding:60px 20px;color:var(--text2);}
+.empty-state i{font-size:44px;margin-bottom:14px;display:block;color:var(--border2);}
+.empty-state p{font-size:15px;}
+.empty-state small{font-size:12px;color:var(--text3);margin-top:6px;display:block;}
+
+.config-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end;justify-content:center;}
+.config-overlay.open{display:flex;}
+.config-sheet{background:var(--bg);border-radius:20px 20px 0 0;padding:24px 20px 40px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;}
+.config-sheet h3{font-size:16px;font-weight:500;margin-bottom:18px;color:var(--text);}
+.config-close{float:right;background:none;border:none;cursor:pointer;font-size:22px;color:var(--text2);margin-top:-4px;}
+.key-input-wrap{position:relative;}
+.key-input-wrap input{padding-right:60px;font-family:monospace;font-size:12px;}
+.key-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:12px;color:var(--text2);font-family:var(--font-body);}
+.config-status{font-size:12px;color:var(--text2);margin-top:6px;display:flex;align-items:center;gap:4px;}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.status-ok{background:var(--teal);}
+.status-err{background:var(--red);}
+.status-na{background:var(--border2);}
+
+.report-area{font-family:monospace;font-size:12px;line-height:1.7;white-space:pre-wrap;background:var(--bg2);border-radius:var(--radius);padding:14px;color:var(--text);min-height:200px;border:0.5px solid var(--border);}
+
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--teal-dark);color:white;padding:10px 20px;border-radius:30px;font-size:13px;font-family:var(--font-body);z-index:200;opacity:0;transition:opacity .3s;pointer-events:none;}
+.toast.show{opacity:1;}
+
+.disclaimer{background:var(--amber-light);border:0.5px solid var(--amber);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:var(--amber);line-height:1.5;margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
+      <div>
+        <div class="app-name">GardIA</div>
+        <div class="app-sub">Assistant de garde gériatrique</div>
+      </div>
+    </div>
+    <button class="config-btn" onclick="openConfig()">
+      <i class="ti ti-settings"></i> Config
+    </button>
+  </div>
+
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="switchTab('analyse')" id="tab-analyse">
+      <i class="ti ti-stethoscope"></i> Analyse
+    </div>
+    <div class="nav-tab" onclick="switchTab('rapport')" id="tab-rapport">
+      <i class="ti ti-file-text"></i> Rapport
+    </div>
+    <div class="nav-tab" onclick="switchTab('historique')" id="tab-historique">
+      <i class="ti ti-history"></i> Historique
+    </div>
+  </div>
+
+  <!-- ANALYSE TAB -->
+  <div class="tab-content active" id="content-analyse">
+    <div id="form-section">
+      <div class="disclaimer">
+        <i class="ti ti-alert-triangle" style="font-size:13px"></i>
+        Aide à la décision uniquement. Le médecin reste seul responsable du diagnostic et du traitement. Anonymisez les données patients avant envoi.
+      </div>
+      <div class="patient-form">
+        <div>
+          <div class="section-label">Identification patient</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Référence</label>
+              <input type="text" id="patientRef" placeholder="Chambre 12, Patient A..."/>
+            </div>
+            <div class="form-group" style="max-width:72px">
+              <label class="form-label">Âge</label>
+              <input type="number" id="patientAge" placeholder="82" min="60" max="120"/>
+            </div>
+            <div class="form-group" style="max-width:90px">
+              <label class="form-label">Sexe</label>
+              <select id="patientSexe">
+                <option value="">—</option>
+                <option value="F">Femme</option>
+                <option value="M">Homme</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="section-label">Symptômes — appuyez pour sélectionner</div>
+          <div class="symptom-tags" id="symptomTags">
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Chute</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Confusion / Démence</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Dyspnée</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Douleur thoracique</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Fièvre</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Hypotension</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Déshydratation</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Escarre</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Trouble de la marche</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Polypharmacie</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Dénutrition</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Agitation nocturne</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Insuffisance cardiaque</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Rétention urinaire</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">AVC / AIT</span>
+            <span class="symptom-tag" onclick="toggleSymptom(this)">Douleur aiguë</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description clinique</label>
+          <textarea id="clinicalNotes" placeholder="Antécédents, traitements en cours, constantes vitales, contexte...&#10;&#10;Ex: Patient de 82 ans, antécédents de FA et IRC stade 3. Retrouvé confus à 3h, TA 90/60, FC 110 irrégulier, déshydraté..."></textarea>
+        </div>
+        <div>
+          <div class="section-label" style="margin-bottom:8px">Document joint (optionnel)</div>
+          <div class="upload-zone" onclick="document.getElementById('fileInput').click()" id="uploadZone">
+            <i class="ti ti-cloud-upload"></i>
+            <p>Appuyez pour joindre un document</p>
+            <span>Photo, PDF ou fichier texte</span>
+          </div>
+          <input type="file" id="fileInput" accept=".pdf,.txt,.png,.jpg,.jpeg,.doc,.docx" onchange="handleFile(event)"/>
+          <div id="filePreview" style="display:none;margin-top:8px"></div>
+        </div>
+        <button class="btn-analyze" onclick="analyzePatient()" id="analyzeBtn">
+          <i class="ti ti-brain"></i> Analyser avec l'IA
+        </button>
+      </div>
+    </div>
+
+    <div class="loading-state" id="loadingState">
+      <div class="loading-spinner"></div>
+      <p>Analyse en cours...</p>
+      <small>Consultation des recommandations OMS gériatrie</small>
+    </div>
+
+    <div id="resultSection" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="section-label" style="margin:0">Résultat de l'analyse</div>
+        <button class="btn-secondary" onclick="resetForm()" style="padding:6px 12px;font-size:12px">
+          <i class="ti ti-plus"></i> Nouveau
+        </button>
+      </div>
+      <div class="result-card" id="diagCard">
+        <div class="result-card-header" style="color:var(--teal)">
+          <i class="ti ti-stethoscope"></i>
+          Diagnostic différentiel
+          <span id="urgencyBadge" style="margin-left:auto"></span>
+        </div>
+        <div class="result-card-body" id="diagContent"></div>
+      </div>
+      <div class="result-card">
+        <div class="result-card-header" style="color:var(--amber)">
+          <i class="ti ti-list-check"></i> Plan de soin immédiat
+        </div>
+        <div class="result-card-body" id="planContent"></div>
+      </div>
+      <div class="result-card">
+        <div class="result-card-header" style="color:var(--blue)">
+          <i class="ti ti-world"></i> Recommandations OMS gériatrie
+        </div>
+        <div class="result-card-body" id="omsContent"></div>
+      </div>
+      <div class="result-card">
+        <div class="result-card-header" style="color:var(--text2)">
+          <i class="ti ti-shield-lock"></i> Points de vigilance
+        </div>
+        <div class="result-card-body" id="vigilanceContent"></div>
+      </div>
+      <div class="result-actions">
+        <button class="btn-secondary" onclick="generateReport()">
+          <i class="ti ti-file-text"></i> Générer rapport
+        </button>
+        <button class="btn-secondary" onclick="copyAnalysis()">
+          <i class="ti ti-copy"></i> Copier
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RAPPORT TAB -->
+  <div class="tab-content" id="content-rapport">
+    <div id="rapportEmpty" class="empty-state">
+      <i class="ti ti-file-text"></i>
+      <p>Aucun rapport généré</p>
+      <small>Analysez d'abord un dossier patient puis cliquez sur "Générer rapport"</small>
+    </div>
+    <div id="rapportContent" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="section-label" style="margin:0">Rapport de garde</div>
+        <button class="btn-secondary" onclick="copyReport()" style="font-size:12px;padding:6px 12px">
+          <i class="ti ti-copy"></i> Copier
+        </button>
+      </div>
+      <div class="report-area" id="reportText"></div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn-analyze" onclick="sendByMail()">
+          <i class="ti ti-mail"></i> Envoyer par mail
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORIQUE TAB -->
+  <div class="tab-content" id="content-historique">
+    <div id="histEmpty" class="empty-state">
+      <i class="ti ti-history"></i>
+      <p>Aucune analyse enregistrée</p>
+      <small>Vos analyses apparaîtront ici automatiquement</small>
+    </div>
+    <div id="histList"></div>
+  </div>
+</div>
+
+<!-- CONFIG PANEL -->
+<div class="config-overlay" id="configPanel" onclick="closeConfigOutside(event)">
+  <div class="config-sheet">
+    <button class="config-close" onclick="closeConfig()"><i class="ti ti-x"></i></button>
+    <h3><i class="ti ti-settings" style="font-size:16px;margin-right:6px"></i>Configuration</h3>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Clé API Gemini</label>
+      <div class="key-input-wrap">
+        <input type="password" id="geminiKey" placeholder="AIza..." oninput="saveConfig()"/>
+        <button class="key-toggle" onclick="toggleVis('geminiKey')">Voir</button>
+      </div>
+      <div class="config-status" id="keyStatus">
+        <span class="status-dot status-na"></span> Non configurée
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Supabase URL</label>
+      <input type="text" id="supabaseUrl" placeholder="https://xxxx.supabase.co" oninput="saveConfig()" style="font-size:12px;font-family:monospace"/>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Supabase Anon Key</label>
+      <div class="key-input-wrap">
+        <input type="password" id="supabaseKey" placeholder="eyJ..." oninput="saveConfig()" style="font-size:12px;font-family:monospace"/>
+        <button class="key-toggle" onclick="toggleVis('supabaseKey')">Voir</button>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:20px">
+      <label class="form-label">Nom du médecin</label>
+      <input type="text" id="doctorName" placeholder="Dr. Prénom NOM" oninput="saveConfig()"/>
+    </div>
+    <button class="btn-analyze" onclick="testConnection()" style="margin-bottom:10px">
+      <i class="ti ti-plug"></i> Tester la connexion
+    </button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let selectedSymptoms=[];
+let currentAnalysis=null;
+let analysisHistory=[];
+let attachedFileText='';
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+function loadConfig(){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(cfg.geminiKey){document.getElementById('geminiKey').value=cfg.geminiKey;updateKeyStatus();}
+  if(cfg.supabaseUrl)document.getElementById('supabaseUrl').value=cfg.supabaseUrl;
+  if(cfg.supabaseKey)document.getElementById('supabaseKey').value=cfg.supabaseKey;
+  if(cfg.doctorName)document.getElementById('doctorName').value=cfg.doctorName;
+}
+
+function saveConfig(){
+  const cfg={
+    geminiKey:document.getElementById('geminiKey').value,
+    supabaseUrl:document.getElementById('supabaseUrl').value,
+    supabaseKey:document.getElementById('supabaseKey').value,
+    doctorName:document.getElementById('doctorName').value
+  };
+  localStorage.setItem('gardia_config',JSON.stringify(cfg));
+  updateKeyStatus();
+}
+
+function updateKeyStatus(){
+  const key=document.getElementById('geminiKey').value;
+  const el=document.getElementById('keyStatus');
+  if(key&&key.length>10){
+    el.innerHTML='<span class="status-dot status-ok"></span> Clé configurée';
+  } else {
+    el.innerHTML='<span class="status-dot status-err"></span> Clé manquante';
+  }
+}
+
+function openConfig(){document.getElementById('configPanel').classList.add('open');}
+function closeConfig(){document.getElementById('configPanel').classList.remove('open');}
+function closeConfigOutside(e){if(e.target===document.getElementById('configPanel'))closeConfig();}
+function toggleVis(id){const i=document.getElementById(id);i.type=i.type==='password'?'text':'password';}
+
+async function testConnection(){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.geminiKey){showToast('Clé Gemini manquante');return;}
+  try{
+    const r=await callGemini('Réponds juste: "GardIA opérationnel ✓"','');
+    showToast(r.substring(0,50));
+    closeConfig();
+  }catch(e){showToast('Erreur: '+e.message);}
+}
+
+function switchTab(tab){
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('content-'+tab).classList.add('active');
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab==='historique')renderHistory();
+}
+
+function toggleSymptom(el){
+  el.classList.toggle('selected');
+  const s=el.textContent;
+  if(el.classList.contains('selected')){selectedSymptoms.push(s);}
+  else{selectedSymptoms=selectedSymptoms.filter(x=>x!==s);}
+}
+
+function handleFile(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const preview=document.getElementById('filePreview');
+  document.getElementById('uploadZone').style.display='none';
+  preview.style.display='block';
+  preview.innerHTML='<div class="file-preview"><i class="ti ti-file-text"></i><span class="file-preview-name">'+file.name+'</span><button class="file-remove" onclick="removeFile()"><i class="ti ti-x"></i></button></div>';
+  const reader=new FileReader();
+  reader.onload=e=>{attachedFileText=e.target.result;};
+  reader.readAsText(file);
+}
+
+function removeFile(){
+  attachedFileText='';
+  document.getElementById('uploadZone').style.display='block';
+  document.getElementById('filePreview').style.display='none';
+  document.getElementById('fileInput').value='';
+}
+
+async function callGemini(prompt,systemContext){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.geminiKey)throw new Error('Clé Gemini non configurée. Allez dans Config.');
+  const full=systemContext?systemContext+'\n\n'+prompt:prompt;
+  const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key='+cfg.geminiKey,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:full}]}],generationConfig:{temperature:0.3,maxOutputTokens:2048}})
+  });
+  if(!res.ok){const err=await res.json();throw new Error(err.error?.message||'Erreur API Gemini');}
+  const data=await res.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+async function analyzePatient(){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.geminiKey){openConfig();return;}
+  const ref=document.getElementById('patientRef').value||'Patient anonyme';
+  const age=document.getElementById('patientAge').value;
+  const sexe=document.getElementById('patientSexe').value;
+  const notes=document.getElementById('clinicalNotes').value;
+  if(!notes&&selectedSymptoms.length===0){showToast('Saisissez une description ou sélectionnez des symptômes');return;}
+  document.getElementById('form-section').style.display='none';
+  document.getElementById('loadingState').style.display='block';
+  document.getElementById('resultSection').style.display='none';
+  const sys=`Tu es un assistant médical spécialisé en gériatrie pour un médecin en France.
+Tu bases tes recommandations sur les guidelines OMS et HAS pour les patients âgés.
+IMPORTANT: Tu fournis uniquement une aide à la décision médicale. Le médecin reste seul responsable.
+Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
+{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","recommandations_oms":"string","vigilance":"string","resume_court":"string en 2 lignes max"}`;
+  const prompt=`Patient: ${ref}, ${age?age+' ans':'âge non précisé'}, ${sexe==='F'?'Femme':sexe==='M'?'Homme':'sexe non précisé'}
+Symptômes: ${selectedSymptoms.length>0?selectedSymptoms.join(', '):'voir notes'}
+Notes cliniques: ${notes||'voir symptômes'}
+${attachedFileText?'Document joint:\n'+attachedFileText.substring(0,2000):''}`;
+  try{
+    const raw=await callGemini(prompt,sys);
+    const m=raw.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('Réponse invalide');
+    const result=JSON.parse(m[0]);
+    currentAnalysis={id:Date.now(),date:new Date().toISOString(),patientRef:ref,age,sexe,symptomes:[...selectedSymptoms],notes,result};
+    analysisHistory.unshift(currentAnalysis);
+    saveToLocalHistory();
+    await saveToSupabase(currentAnalysis);
+    document.getElementById('loadingState').style.display='none';
+    document.getElementById('resultSection').style.display='block';
+    renderResult(result);
+  }catch(e){
+    document.getElementById('loadingState').style.display='none';
+    document.getElementById('form-section').style.display='block';
+    showToast('Erreur: '+e.message);
+  }
+}
+
+function renderResult(r){
+  document.getElementById('diagContent').textContent=r.diagnostic;
+  document.getElementById('planContent').textContent=r.plan_immediat;
+  document.getElementById('omsContent').textContent=r.recommandations_oms;
+  document.getElementById('vigilanceContent').textContent=r.vigilance;
+  const map={FAIBLE:['badge-success','Urgence faible'],MODÉRÉE:['badge-warning','Urgence modérée'],ÉLEVÉE:['badge-danger','Urgence élevée'],CRITIQUE:['badge-danger','⚠ CRITIQUE']};
+  const [cls,label]=map[r.urgence]||['badge-warning',r.urgence];
+  document.getElementById('urgencyBadge').innerHTML='<span class="badge '+cls+'">'+label+'</span>';
+}
+
+async function generateReport(){
+  if(!currentAnalysis){showToast('Aucune analyse en cours');return;}
+  switchTab('rapport');
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  const doc=cfg.doctorName||'Dr. Médecin de garde';
+  const now=new Date();
+  const ds=now.toLocaleDateString('fr-FR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const ts=now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('rapportEmpty').style.display='none';
+  document.getElementById('rapportContent').style.display='block';
+  const r=currentAnalysis.result;
+  const report=`RAPPORT DE GARDE — SERVICE DE GÉRIATRIE
+═══════════════════════════════════════════
+Date : ${ds} à ${ts}
+Médecin de garde : ${doc}
+───────────────────────────────────────────
+
+PATIENT
+Référence : ${currentAnalysis.patientRef}${currentAnalysis.age?'\nÂge : '+currentAnalysis.age+' ans':''}${currentAnalysis.sexe?'\nSexe : '+(currentAnalysis.sexe==='F'?'Féminin':'Masculin'):''}
+Symptômes principaux : ${currentAnalysis.symptomes.join(', ')||'Voir notes'}
+
+ÉVALUATION CLINIQUE
+${currentAnalysis.notes||'Voir symptômes sélectionnés'}
+
+DIAGNOSTIC DIFFÉRENTIEL
+${r.diagnostic}
+
+NIVEAU D'URGENCE : ${r.urgence}
+
+PLAN DE SOIN IMMÉDIAT
+${r.plan_immediat}
+
+RECOMMANDATIONS OMS GÉRIATRIE
+${r.recommandations_oms}
+
+POINTS DE VIGILANCE
+${r.vigilance}
+
+───────────────────────────────────────────
+Rapport généré avec l'aide de GardIA
+Validation médicale obligatoire — ${doc}`;
+  document.getElementById('reportText').textContent=report;
+}
+
+function copyReport(){
+  const text=document.getElementById('reportText').textContent;
+  navigator.clipboard.writeText(text).then(()=>showToast('Rapport copié !'));
+}
+
+function copyAnalysis(){
+  if(!currentAnalysis)return;
+  const r=currentAnalysis.result;
+  const text='Diagnostic: '+r.diagnostic+'\n\nPlan: '+r.plan_immediat+'\n\nOMS: '+r.recommandations_oms;
+  navigator.clipboard.writeText(text).then(()=>showToast('Analyse copiée !'));
+}
+
+function sendByMail(){
+  const text=document.getElementById('reportText').textContent;
+  const subj='Rapport de garde — '+(currentAnalysis?.patientRef||'Patient')+' — '+new Date().toLocaleDateString('fr-FR');
+  window.location.href='mailto:?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(text);
+}
+
+function resetForm(){
+  document.getElementById('form-section').style.display='block';
+  document.getElementById('resultSection').style.display='none';
+  document.getElementById('clinicalNotes').value='';
+  document.getElementById('patientRef').value='';
+  document.getElementById('patientAge').value='';
+  document.getElementById('patientSexe').value='';
+  selectedSymptoms=[];
+  document.querySelectorAll('.symptom-tag.selected').forEach(t=>t.classList.remove('selected'));
+  removeFile();
+  currentAnalysis=null;
+}
+
+function saveToLocalHistory(){
+  localStorage.setItem('gardia_history',JSON.stringify(analysisHistory.slice(0,50)));
+}
+
+function loadHistory(){
+  const h=localStorage.getItem('gardia_history');
+  if(h)analysisHistory=JSON.parse(h);
+}
+
+function renderHistory(){
+  const list=document.getElementById('histList');
+  const empty=document.getElementById('histEmpty');
+  if(analysisHistory.length===0){empty.style.display='block';list.innerHTML='';return;}
+  empty.style.display='none';
+  list.innerHTML=analysisHistory.map(a=>{
+    const d=new Date(a.date);
+    const ds=d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    const uc={FAIBLE:'var(--teal)',MODÉRÉE:'var(--amber)',ÉLEVÉE:'var(--red)',CRITIQUE:'var(--red)'}[a.result?.urgence]||'var(--text2)';
+    return '<div class="history-item" onclick="loadAnalysis('+a.id+')">'+
+      '<div class="history-meta"><span class="history-patient">'+a.patientRef+(a.age?', '+a.age+' ans':'')+'</span><span class="history-date">'+ds+'</span></div>'+
+      '<div class="history-preview">'+(a.result?.resume_court||a.result?.diagnostic?.substring(0,100)+'...')+'</div>'+
+      (a.result?.urgence?'<div style="margin-top:6px"><span style="font-size:11px;color:'+uc+';font-weight:500">'+a.result.urgence+'</span></div>':'')+
+      '</div>';
+  }).join('');
+}
+
+function loadAnalysis(id){
+  const a=analysisHistory.find(x=>x.id===id);
+  if(!a)return;
+  currentAnalysis=a;
+  switchTab('analyse');
+  document.getElementById('form-section').style.display='none';
+  document.getElementById('resultSection').style.display='block';
+  renderResult(a.result);
+}
+
+async function saveToSupabase(analysis){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.supabaseUrl||!cfg.supabaseKey)return;
+  try{
+    await fetch(cfg.supabaseUrl+'/rest/v1/analyses',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey,'Prefer':'return=minimal'},
+      body:JSON.stringify({patient_ref:analysis.patientRef,age:analysis.age?parseInt(analysis.age):null,sexe:analysis.sexe||null,contenu_brut:analysis.notes,symptomes:analysis.symptomes,diagnostic_ia:analysis.result.diagnostic,recommandations:analysis.result.recommandations_oms,plan_action:analysis.result.plan_immediat,rapport_genere:analysis.result.resume_court})
+    });
+  }catch(e){console.log('Supabase skip:',e.message);}
+}
+
+loadConfig();
+loadHistory();
+</script>
+</body>
+</html>
