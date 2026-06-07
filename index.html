@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.0.4</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.0.5</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -719,7 +719,8 @@ function renderHistory(){
     const ds=d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     const uc={FAIBLE:'var(--teal)',MODÉRÉE:'var(--amber)',ÉLEVÉE:'var(--red)',CRITIQUE:'var(--red)'}[a.result?.urgence]||'var(--text2)';
     return '<div class="history-item" onclick="loadAnalysis('+a.id+')">'+
-      '<div class="history-meta"><span class="history-patient">'+a.patientRef+(a.age?', '+a.age+' ans':'')+'</span><span class="history-date">'+ds+'</span></div>'+
+      '<div class="history-meta"><span class="history-patient">'+(a.patientId||'ID en cours')+(a.age?', '+a.age+' ans':'')+'</span><span class="history-date">'+ds+'</span></div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Réf: '+a.patientRef+'</div>'+
       '<div class="history-preview">'+(a.result?.resume_court||a.result?.diagnostic?.substring(0,100)+'...')+'</div>'+
       (a.result?.urgence?'<div style="margin-top:6px"><span style="font-size:11px;color:'+uc+';font-weight:500">'+a.result.urgence+'</span></div>':'')+
       '</div>';
@@ -736,15 +737,82 @@ function loadAnalysis(id){
   renderResult(a.result);
 }
 
+function generatePatientId(){
+  const now=new Date();
+  const year=now.getFullYear();
+  const seq=String(Math.floor(Math.random()*9000)+1000);
+  return 'PAT-'+year+'-'+seq;
+}
+
+async function supabaseFetch(cfg, path, method, body){
+  const res=await fetch(cfg.supabaseUrl+path,{
+    method:method||'POST',
+    headers:{'Content-Type':'application/json','apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey,'Prefer':'return=minimal'},
+    body:body?JSON.stringify(body):undefined
+  });
+  return res;
+}
+
+async function findOrCreatePatient(cfg, analysis){
+  // Cherche si patient existe déjà via référence locale
+  const localMap=JSON.parse(localStorage.getItem('gardia_patient_map')||'{}');
+  const refKey=analysis.patientRef.toLowerCase().trim();
+  if(localMap[refKey])return localMap[refKey];
+  // Crée un nouvel ID pseudonymisé
+  const patientId=generatePatientId();
+  // Stocke identité (si nom détecté dans la ref)
+  const hasRealName=/[A-Z]{2,}/.test(analysis.patientRef);
+  if(hasRealName){
+    await supabaseFetch(cfg,'/rest/v1/patients_identites','POST',{
+      id:patientId,
+      nom:analysis.patientRef,
+      created_at:new Date().toISOString()
+    });
+  }
+  // Stocke données médicales anonymisées
+  await supabaseFetch(cfg,'/rest/v1/patients_medicaux','POST',{
+    id:patientId,
+    age:analysis.age?parseInt(analysis.age):null,
+    sexe:analysis.sexe||null,
+    antecedents:[],
+    allergies:[],
+    traitements:[]
+  });
+  // Mémorise localement
+  localMap[refKey]=patientId;
+  localStorage.setItem('gardia_patient_map',JSON.stringify(localMap));
+  return patientId;
+}
+
 async function saveToSupabase(analysis){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
   if(!cfg.supabaseUrl||!cfg.supabaseKey)return;
   try{
-    await fetch(cfg.supabaseUrl+'/rest/v1/analyses',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey,'Prefer':'return=minimal'},
-      body:JSON.stringify({patient_ref:analysis.patientRef,age:analysis.age?parseInt(analysis.age):null,sexe:analysis.sexe||null,contenu_brut:analysis.notes,symptomes:analysis.symptomes,diagnostic_ia:analysis.result.diagnostic,recommandations:analysis.result.recommandations_oms,plan_action:analysis.result.plan_immediat,rapport_genere:analysis.result.resume_court})
+    const patientId=await findOrCreatePatient(cfg,analysis);
+    analysis.patientId=patientId;
+    // Sauvegarde dans analyses (sans nom)
+    await supabaseFetch(cfg,'/rest/v1/analyses','POST',{
+      patient_id:patientId,
+      age:analysis.age?parseInt(analysis.age):null,
+      sexe:analysis.sexe||null,
+      contenu_brut:analysis.notes,
+      symptomes:analysis.symptomes,
+      diagnostic_ia:analysis.result.diagnostic,
+      recommandations:analysis.result.recommandations_oms||'',
+      plan_action:analysis.result.plan_immediat,
+      rapport_genere:analysis.result.resume_court,
+      medecin:cfg.doctorName||'Médecin de garde'
     });
+    // Sauvegarde dans gardes
+    await supabaseFetch(cfg,'/rest/v1/gardes','POST',{
+      patient_id:patientId,
+      medecin:cfg.doctorName||'Médecin de garde',
+      symptomes:analysis.symptomes,
+      diagnostic_ia:analysis.result.diagnostic,
+      plan_action:analysis.result.plan_immediat,
+      notes_brutes:analysis.notes
+    });
+    showToast('Sauvegardé — ID: '+patientId);
   }catch(e){console.log('Supabase skip:',e.message);}
 }
 
