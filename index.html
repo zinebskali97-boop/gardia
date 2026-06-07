@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.0.5</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.0.6</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -450,7 +450,7 @@ function switchTab(tab){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('content-'+tab).classList.add('active');
   document.getElementById('tab-'+tab).classList.add('active');
-  if(tab==='historique')renderHistory();
+  if(tab==='historique'){loadHistoryFromSupabase().then(()=>renderHistory());}
 }
 
 function toggleSymptom(el){
@@ -568,6 +568,7 @@ async function analyzePatient(){
     analysisHistory.unshift(currentAnalysis);
     saveToLocalHistory();
     await saveToSupabase(currentAnalysis);
+    await saveHistoryToSupabase(currentAnalysis);
 
     document.getElementById('loadingState').style.display='none';
     document.getElementById('resultSection').style.display='block';
@@ -702,6 +703,71 @@ function resetForm(){
 
 function saveToLocalHistory(){
   localStorage.setItem('gardia_history',JSON.stringify(analysisHistory.slice(0,50)));
+}
+
+async function saveHistoryToSupabase(analysis){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.supabaseUrl||!cfg.supabaseKey)return;
+  try{
+    await fetch(cfg.supabaseUrl+'/rest/v1/historique_analyses',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey,'Prefer':'return=minimal'},
+      body:JSON.stringify({
+        local_id:String(analysis.id),
+        patient_id:analysis.patientId||null,
+        patient_ref_anon:analysis.patientRef?analysis.patientRef.replace(/[A-Z]{2,}/g,'***'):null,
+        age:analysis.age?parseInt(analysis.age):null,
+        sexe:analysis.sexe||null,
+        symptomes:analysis.symptomes||[],
+        notes_anon:analysis.notes?analysis.notes.replace(/[A-Z][a-z]+ [A-Z]{2,}/g,'***'):null,
+        diagnostic_ia:analysis.result?.diagnostic||null,
+        plan_action:analysis.result?.plan_immediat||null,
+        vigilance:analysis.result?.vigilance||null,
+        resume_court:analysis.result?.resume_court||null,
+        urgence:analysis.result?.urgence||null,
+        medecin:cfg.doctorName||'Médecin de garde',
+        date_analyse:new Date(analysis.date||Date.now()).toISOString()
+      })
+    });
+  }catch(e){console.log('Supabase history skip:',e.message);}
+}
+
+async function loadHistoryFromSupabase(){
+  const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
+  if(!cfg.supabaseUrl||!cfg.supabaseKey)return;
+  try{
+    const res=await fetch(cfg.supabaseUrl+'/rest/v1/historique_analyses?order=date_analyse.desc&limit=100',{
+      headers:{'apikey':cfg.supabaseKey,'Authorization':'Bearer '+cfg.supabaseKey}
+    });
+    if(!res.ok)return;
+    const data=await res.json();
+    if(!data||data.length===0)return;
+    // Merge avec localStorage — Supabase est la source de vérité
+    const supabaseItems=data.map(r=>({
+      id:r.local_id||r.id,
+      date:r.date_analyse,
+      patientRef:r.patient_ref_anon||'Patient',
+      patientId:r.patient_id||null,
+      age:r.age,
+      sexe:r.sexe,
+      symptomes:r.symptomes||[],
+      notes:r.notes_anon||'',
+      fromSupabase:true,
+      result:{
+        diagnostic:r.diagnostic_ia||'',
+        plan_immediat:r.plan_action||'',
+        vigilance:r.vigilance||'',
+        resume_court:r.resume_court||'',
+        urgence:r.urgence||'MODÉRÉE'
+      }
+    }));
+    // Fusionne en gardant les locaux récents non encore sync
+    const localIds=new Set(supabaseItems.map(x=>String(x.id)));
+    const localOnly=analysisHistory.filter(x=>!localIds.has(String(x.id)));
+    analysisHistory=[...localOnly,...supabaseItems];
+    saveToLocalHistory();
+    showToast('Historique synchronisé ('+supabaseItems.length+' analyses)');
+  }catch(e){console.log('Supabase load skip:',e.message);}
 }
 
 function loadHistory(){
