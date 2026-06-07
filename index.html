@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.1.7</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.1.8</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -513,7 +513,7 @@ function removeFile(){
 async function callClaude(prompt,systemContext){
   const cfg=JSON.parse(localStorage.getItem('gardia_config')||'{}');
   if(!cfg.claudeKey)throw new Error('Clé Claude non configurée. Allez dans Config.');
-  const body={model:'claude-haiku-4-5-20251001',max_tokens:2048,messages:[{role:'user',content:prompt}]};
+  const body={model:'claude-haiku-4-5-20251001',max_tokens:600,messages:[{role:'user',content:prompt}]};
   if(systemContext)body.system=systemContext;
   const res=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
@@ -652,13 +652,13 @@ async function analyzePatient(){
     document.getElementById('loadingState').querySelector('small').textContent='Analyse en cours...';
   }
 
+  // Ne pas envoyer l'historique brut à Claude — trop long, ralentit tout
   const patientDesc='Patient: '+ref+', '+(age?age+' ans':'âge non précisé')+', '+(sexe==='F'?'Femme':sexe==='M'?'Homme':'sexe non précisé')+
     '\nSymptômes: '+(selectedSymptoms.length>0?selectedSymptoms.join(', '):'voir notes')+
     '\nNotes cliniques: '+(notes||'voir symptômes')+
-    (attachedFileText?'\nDocument joint:\n'+attachedFileText.substring(0,2000):'')+
-    historyContext;
+    (attachedFileText?'\nDocument joint:\n'+attachedFileText.substring(0,1000):'');
 
-  const sysDiag='Tu es un assistant médical spécialisé en gériatrie pour un médecin en France. Aide à la décision uniquement — le médecin reste seul responsable.\nSi un historique du service est fourni, utilise-le pour enrichir ton analyse (mentionner ce qui a fonctionné avant, les patterns récurrents).\nRéponds UNIQUEMENT en JSON valide:\n{"diagnostic":"string","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"string","vigilance":"string","resume_court":"string 2 lignes max","mots_cles_recherche":"string — 3 à 5 mots-clés médicaux pour recherche HAS/OMS","vigilance_extra":"string ou null"}';
+  const sysDiag='Médecin gériatre France. Réponds UNIQUEMENT en JSON:{"diagnostic":"1 phrase","urgence":"FAIBLE|MODÉRÉE|ÉLEVÉE|CRITIQUE","plan_immediat":"3 actions max","vigilance":"1 point clé","resume_court":"1 ligne","mots_cles_recherche":"3 mots-clés HAS"}';
 
   try{
     // ETAPE 1 — Diagnostic Claude immédiat — médecin voit le résultat tout de suite
