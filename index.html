@@ -150,7 +150,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
       <div class="logo-mark"><i class="ti ti-heart-rate-monitor"></i></div>
       <div>
         <div class="app-name">GardIA</div>
-        <div class="app-sub">Assistant de garde gériatrique • v1.1.9</div>
+        <div class="app-sub">Assistant de garde gériatrique • v1.2.0</div>
       </div>
     </div>
     <button class="config-btn" onclick="openConfig()">
@@ -526,19 +526,9 @@ async function callClaude(prompt,systemContext){
 }
 
 function switchReco(n){
-  const t1=document.getElementById('recoTab1');
-  const t2=document.getElementById('recoTab2');
+  // Un seul onglet HAS/OMS désormais — rien à switcher
   const p1=document.getElementById('recoPanel1');
-  const p2=document.getElementById('recoPanel2');
-  if(n===1){
-    t1.style.background='var(--blue)';t1.style.color='white';
-    t2.style.background='var(--bg2)';t2.style.color='var(--text2)';
-    p1.style.display='block';p2.style.display='none';
-  } else {
-    t2.style.background='var(--teal)';t2.style.color='white';
-    t1.style.background='var(--bg2)';t1.style.color='var(--text2)';
-    p2.style.display='block';p1.style.display='none';
-  }
+  if(p1)p1.style.display='block';
 }
 
 function renderSources(sources, containerId){
